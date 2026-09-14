@@ -1,35 +1,71 @@
-from pydantic import BaseModel, EmailStr
+"""Pydantic schemas for admin_users (org_units, users)."""
+
 from datetime import datetime
-from typing import Optional, List
 
-# --- Organization 스키마 ---
-class OrganizationBase(BaseModel):
-    name: str
+from pydantic import BaseModel, ConfigDict, EmailStr, Field
 
-class OrganizationCreate(OrganizationBase):
-    pass
+USER_STATUSES = ("ACTIVE", "INACTIVE", "SUSPENDED", "WITHDRAWN")
+ORG_TYPES = ("HEADQUARTER", "BRANCH", "STORE", "WAREHOUSE")
 
-class OrganizationResponse(OrganizationBase):
-    id: int
+
+# --- Organizations (org_units) -------------------------------------------
+
+
+class OrganizationCreate(BaseModel):
+    org_code: str = Field(..., max_length=50)
+    org_name: str = Field(..., max_length=150)
+    org_type: str
+    parent_org_id: int | None = None
+    business_number: str | None = Field(None, max_length=30)
+    representative_name: str | None = Field(None, max_length=100)
+    phone: str | None = Field(None, max_length=30)
+    email: str | None = Field(None, max_length=255)
+    zipcode: str | None = Field(None, max_length=20)
+    address1: str | None = Field(None, max_length=300)
+    address2: str | None = Field(None, max_length=300)
+
+
+class OrganizationOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    org_id: int
+    parent_org_id: int | None
+    org_code: str
+    org_name: str
+    org_type: str
+    business_number: str | None
+    representative_name: str | None
+    phone: str | None
+    email: str | None
+    zipcode: str | None
+    address1: str | None
+    address2: str | None
+    active_yn: str
     created_at: datetime
-
-    class Config:
-        from_attributes = True
+    updated_at: datetime
 
 
-# --- User 스키마 ---
-class UserBase(BaseModel):
+# --- Users -----------------------------------------------------------------
+
+
+class UserCreate(BaseModel):
+    login_id: str = Field(..., max_length=100)
+    password: str  # 평문 입력, 서비스 레이어에서 해시 처리
+    user_name: str = Field(..., max_length=100)
     email: EmailStr
-    name: str
-    organization_id: Optional[int] = None
+    phone: str | None = Field(None, max_length=30)
+    org_id: int | None = None
 
-class UserCreate(UserBase):
-    password: str  # 회원가입 시에는 평문 비밀번호를 입력받음
 
-class UserResponse(UserBase):
-    id: int
+class UserOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    user_id: int
+    org_id: int | None
+    login_id: str
+    user_name: str
+    email: str
+    phone: str | None
+    user_status: str
     created_at: datetime
-    organization: Optional[OrganizationResponse] = None  # 소속 조직 정보 포함
-
-    class Config:
-        from_attributes = True
+    updated_at: datetime
