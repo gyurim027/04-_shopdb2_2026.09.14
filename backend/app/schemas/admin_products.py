@@ -117,3 +117,63 @@ class VariantOut(BaseModel):
     option_value2: str | None
     additional_price: Decimal
     active_yn: str
+
+
+# --- Product images --------------------------------------------------------
+# DB enum(product_images.image_type): MAIN / DETAIL / THUMBNAIL / OPTION
+
+
+class ProductImageCreate(BaseModel):
+    file_id: int
+    image_type: str = "DETAIL"
+    alt_text: str | None = Field(None, max_length=500)
+    display_order: int = 0
+
+
+class ProductImageUpdate(BaseModel):
+    image_type: str | None = None
+    alt_text: str | None = Field(None, max_length=500)
+    display_order: int | None = None
+    active_yn: str | None = Field(None, pattern="^[YN]$")
+
+
+class ProductImageOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    product_image_id: int
+    product_id: int
+    file_id: int
+    image_type: str
+    alt_text: str | None
+    display_order: int
+    active_yn: str
+    created_at: datetime
+
+
+# --- Product files (첨부파일) ------------------------------------------------
+# 이 테이블엔 active_yn이 없어 삭제는 소프트 삭제가 아니라 실제 DELETE로 처리한다.
+
+
+class ProductFileCreate(BaseModel):
+    file_id: int
+    file_category: str | None = Field(None, max_length=50)
+    file_description: str | None = Field(None, max_length=500)
+    display_order: int = 0
+
+
+class ProductFileUpdate(BaseModel):
+    file_category: str | None = Field(None, max_length=50)
+    file_description: str | None = Field(None, max_length=500)
+    display_order: int | None = None
+
+
+class ProductFileOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    product_file_id: int
+    product_id: int
+    file_id: int
+    file_category: str | None
+    file_description: str | None
+    display_order: int
+    created_at: datetime

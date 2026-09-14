@@ -10,6 +10,12 @@ from app.schemas.admin_products import (
     CategoryOut,
     CategoryUpdate,
     ProductCreate,
+    ProductFileCreate,
+    ProductFileOut,
+    ProductFileUpdate,
+    ProductImageCreate,
+    ProductImageOut,
+    ProductImageUpdate,
     ProductOut,
     ProductPage,
     ProductUpdate,
@@ -172,3 +178,94 @@ def deactivate_variant(
     auth: AuthContext = Depends(require_admin),
 ) -> None:
     service.deactivate_variant(db, variant_id, auth)
+
+
+# --- Product images --------------------------------------------------------
+
+
+@router.get("/products/{product_id}/images", response_model=list[ProductImageOut])
+def list_images(
+    product_id: int,
+    db: Session = Depends(get_db),
+    auth: AuthContext = Depends(require_admin),
+) -> list[ProductImageOut]:
+    return service.list_images(db, product_id, auth)
+
+
+@router.post(
+    "/products/{product_id}/images", response_model=ProductImageOut, status_code=201
+)
+def create_image(
+    product_id: int,
+    payload: ProductImageCreate,
+    db: Session = Depends(get_db),
+    auth: AuthContext = Depends(require_admin),
+) -> ProductImageOut:
+    return service.create_image(db, product_id, payload.model_dump(), auth)
+
+
+@router.patch("/images/{product_image_id}", response_model=ProductImageOut)
+def update_image(
+    product_image_id: int,
+    payload: ProductImageUpdate,
+    db: Session = Depends(get_db),
+    auth: AuthContext = Depends(require_admin),
+) -> ProductImageOut:
+    return service.update_image(
+        db, product_image_id, payload.model_dump(exclude_unset=True), auth
+    )
+
+
+@router.delete("/images/{product_image_id}", status_code=204)
+def deactivate_image(
+    product_image_id: int,
+    db: Session = Depends(get_db),
+    auth: AuthContext = Depends(require_admin),
+) -> None:
+    service.deactivate_image(db, product_image_id, auth)
+
+
+# --- Product files (첨부파일) ------------------------------------------------
+# active_yn이 없는 테이블이라 DELETE는 실제 삭제로 처리한다 (다른 도메인과 다름, 주의).
+
+
+@router.get("/products/{product_id}/files", response_model=list[ProductFileOut])
+def list_files(
+    product_id: int,
+    db: Session = Depends(get_db),
+    auth: AuthContext = Depends(require_admin),
+) -> list[ProductFileOut]:
+    return service.list_files(db, product_id, auth)
+
+
+@router.post(
+    "/products/{product_id}/files", response_model=ProductFileOut, status_code=201
+)
+def create_file(
+    product_id: int,
+    payload: ProductFileCreate,
+    db: Session = Depends(get_db),
+    auth: AuthContext = Depends(require_admin),
+) -> ProductFileOut:
+    return service.create_file(db, product_id, payload.model_dump(), auth)
+
+
+@router.patch("/files/{product_file_id}", response_model=ProductFileOut)
+def update_file(
+    product_file_id: int,
+    payload: ProductFileUpdate,
+    db: Session = Depends(get_db),
+    auth: AuthContext = Depends(require_admin),
+) -> ProductFileOut:
+    return service.update_file(
+        db, product_file_id, payload.model_dump(exclude_unset=True), auth
+    )
+
+
+@router.delete("/files/{product_file_id}", status_code=204)
+def delete_file(
+    product_file_id: int,
+    db: Session = Depends(get_db),
+    auth: AuthContext = Depends(require_admin),
+) -> None:
+    service.delete_file(db, product_file_id, auth)

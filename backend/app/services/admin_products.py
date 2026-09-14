@@ -6,7 +6,7 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.dependencies.auth import AuthContext
-from app.models.products import Category, Product, ProductVariant
+from app.models.products import Category, Product, ProductFile, ProductImage, ProductVariant
 
 
 def get_org_type(db: Session, org_id: int | None) -> str | None:
@@ -255,4 +255,120 @@ def deactivate_variant(db: Session, variant_id: int, auth: AuthContext) -> None:
     require_super_admin(db, auth)  # 지점장은 삭제 불가
     variant = get_variant(db, variant_id, auth)
     variant.active_yn = "N"
+    db.commit()
+
+
+# --- Product images --------------------------------------------------------
+# 04_관리자권한매트릭스: 상품과 동일한 스코프 규칙(부모 상품의 seller org 기준).
+
+
+def list_images(db: Session, product_id: int, auth: AuthContext) -> list[ProductImage]:
+    get_product(db, product_id, auth)
+    return list(
+        db.query(ProductImage)
+        .filter(ProductImage.product_id == product_id)
+        .order_by(ProductImage.display_order)
+        .all()
+    )
+
+
+def get_image(db: Session, product_image_id: int, auth: AuthContext) -> ProductImage:
+    image = db.get(ProductImage, product_image_id)
+    if image is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="상품 이미지를 찾을 수 없습니다."
+        )
+    product = db.get(Product, image.product_id)
+    if product is not None:
+        _assert_product_in_scope(db, product, auth)
+    return image
+
+
+def create_image(
+    db: Session, product_id: int, data: dict, auth: AuthContext
+) -> ProductImage:
+    require_super_admin(db, auth)  # 지점장은 등록 불가
+    get_product(db, product_id, auth)
+    image = ProductImage(product_id=product_id, **data)
+    db.add(image)
+    db.commit()
+    db.refresh(image)
+    return image
+
+
+def update_image(
+    db: Session, product_image_id: int, data: dict, auth: AuthContext
+) -> ProductImage:
+    image = get_image(db, product_image_id, auth)
+    for key, value in data.items():
+        if value is not None:
+            setattr(image, key, value)
+    db.commit()
+    db.refresh(image)
+    return image
+
+
+def deactivate_image(db: Session, product_image_id: int, auth: AuthContext) -> None:
+    """실제 삭제가 아니라 active_yn='N' 처리 (소프트 삭제)."""
+    require_super_admin(db, auth)  # 지점장은 삭제 불가
+    image = get_image(db, product_image_id, auth)
+    image.active_yn = "N"
+    db.commit()
+
+
+# --- Product files (첨부파일) ------------------------------------------------
+# active_yn 컬럼이 없어 삭제는 소프트 삭제가 아니라 실제 DELETE로 처리한다.
+
+
+def list_files(db: Session, product_id: int, auth: AuthContext) -> list[ProductFile]:
+    get_product(db, product_id, auth)
+    return list(
+        db.query(ProductFile)
+        .filter(ProductFile.product_id == product_id)
+        .order_by(ProductFile.display_order)
+        .all()
+    )
+
+
+def get_file(db: Session, product_file_id: int, auth: AuthContext) -> ProductFile:
+    file_row = db.get(ProductFile, product_file_id)
+    if file_row is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="상품 첨부파일을 찾을 수 없습니다."
+        )
+    product = db.get(Product, file_row.product_id)
+    if product is not None:
+        _assert_product_in_scope(db, product, auth)
+    return file_row
+
+
+def create_file(
+    db: Session, product_id: int, data: dict, auth: AuthContext
+) -> ProductFile:
+    require_super_admin(db, auth)  # 지점장은 등록 불가
+    get_product(db, product_id, auth)
+    file_row = ProductFile(product_id=product_id, **data)
+    db.add(file_row)
+    db.commit()
+    db.refresh(file_row)
+    return file_row
+
+
+def update_file(
+    db: Session, product_file_id: int, data: dict, auth: AuthContext
+) -> ProductFile:
+    file_row = get_file(db, product_file_id, auth)
+    for key, value in data.items():
+        if value is not None:
+            setattr(file_row, key, value)
+    db.commit()
+    db.refresh(file_row)
+    return file_row
+
+
+def delete_file(db: Session, product_file_id: int, auth: AuthContext) -> None:
+    """이 테이블엔 active_yn이 없어 실제 DELETE로 처리 (소프트 삭제 아님)."""
+    require_super_admin(db, auth)  # 지점장은 삭제 불가
+    file_row = get_file(db, product_file_id, auth)
+    db.delete(file_row)
     db.commit()

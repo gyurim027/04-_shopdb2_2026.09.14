@@ -68,3 +68,36 @@ class ProductVariant(Base):
         Numeric(15, 2), nullable=False, default=0
     )
     active_yn: Mapped[str] = mapped_column(String(1), nullable=False, default="Y")
+
+
+class ProductImage(Base):
+    __tablename__ = "product_images"
+
+    product_image_id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    product_id: Mapped[int] = mapped_column(
+        ForeignKey("products.product_id"), nullable=False
+    )
+    # file_assets는 현수님 소유(models/files.py) — §10 규칙: ForeignKey() 선언하지 않음.
+    file_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    # DB enum: MAIN / DETAIL / THUMBNAIL / OPTION
+    image_type: Mapped[str] = mapped_column(String(20), nullable=False, default="DETAIL")
+    alt_text: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    display_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    active_yn: Mapped[str] = mapped_column(String(1), nullable=False, default="Y")
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+
+
+class ProductFile(Base):
+    __tablename__ = "product_files"
+
+    product_file_id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    product_id: Mapped[int] = mapped_column(
+        ForeignKey("products.product_id"), nullable=False
+    )
+    # file_assets는 현수님 소유(models/files.py) — §10 규칙: ForeignKey() 선언하지 않음.
+    file_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    file_category: Mapped[str | None] = mapped_column(String(50), nullable=True)
+    file_description: Mapped[str | None] = mapped_column(String(500), nullable=True)
+    display_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
+    # 주의: 이 테이블엔 active_yn이 없음 -> 소프트 삭제 불가, 삭제는 실제 DELETE로 처리
