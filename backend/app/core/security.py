@@ -22,6 +22,10 @@ def verify_password(plain_password: str, hashed_password: str) -> bool:
         return False
 
 
+# admin_users.py 서비스 코드와의 호환성을 위한 별칭 추가
+get_password_hash = hash_password
+
+
 def create_access_token(subject: str, extra_claims: dict[str, Any] | None = None) -> str:
     now = datetime.now(timezone.utc)
     payload: dict[str, Any] = {
@@ -51,6 +55,7 @@ __all__ = [
     "InvalidTokenError",
     "create_access_token",
     "decode_access_token",
+    "get_password_hash",
     "hash_password",
     "verify_password",
 ]

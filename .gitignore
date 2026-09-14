@@ -1,8 +1,7 @@
-<<<<<<< HEAD
 # Python / uv
 .venv/
 __pycache__/
-*.pyc
+*.py[cod]
 .uv/
 .pytest_cache/
 .mypy_cache/
@@ -19,6 +18,9 @@ build/
 .env.*
 !.env.example
 
+# Uploads (파일/미디어 도메인 로컬 업로드 저장 경로)
+uploads/
+
 # Editor / OS
 .vscode/
 .idea/
@@ -27,13 +29,3 @@ Thumbs.db
 
 # Claude Code local settings
 .claude/
-=======
-.venv/
-.env
-__pycache__/
-*.py[cod]
-.pytest_cache/
-.mypy_cache/
-.ruff_cache/
-uploads/
->>>>>>> 72f32de (feat: 사용자 및 조직 관리 백엔드 API 구현 완료)
