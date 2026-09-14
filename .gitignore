@@ -1,3 +1,4 @@
+<<<<<<< HEAD
 # Python / uv
 .venv/
 __pycache__/
@@ -26,3 +27,13 @@ Thumbs.db
 
 # Claude Code local settings
 .claude/
+=======
+.venv/
+.env
+__pycache__/
+*.py[cod]
+.pytest_cache/
+.mypy_cache/
+.ruff_cache/
+uploads/
+>>>>>>> 72f32de (feat: 사용자 및 조직 관리 백엔드 API 구현 완료)
