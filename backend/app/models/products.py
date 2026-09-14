@@ -101,3 +101,20 @@ class ProductFile(Base):
     display_order: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
     created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())
     # 주의: 이 테이블엔 active_yn이 없음 -> 소프트 삭제 불가, 삭제는 실제 DELETE로 처리
+
+
+class Inventory(Base):
+    __tablename__ = "inventories"
+
+    inventory_id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    # org_units는 명현님 소유(models/users.py) — §10 규칙: ForeignKey() 선언하지 않음.
+    org_id: Mapped[int] = mapped_column(Integer, nullable=False)
+    variant_id: Mapped[int] = mapped_column(
+        ForeignKey("product_variants.variant_id"), nullable=False
+    )
+    stock_quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    reserved_quantity: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    safety_stock: Mapped[int] = mapped_column(Integer, nullable=False, default=0)
+    updated_at: Mapped[datetime] = mapped_column(
+        DateTime, server_default=func.now(), onupdate=func.now()
+    )

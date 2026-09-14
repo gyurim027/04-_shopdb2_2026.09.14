@@ -16,6 +16,9 @@ from app.schemas.admin_products import (
     ProductImageCreate,
     ProductImageOut,
     ProductImageUpdate,
+    InventoryCreate,
+    InventoryOut,
+    InventoryUpdate,
     ProductOut,
     ProductPage,
     ProductUpdate,
@@ -269,3 +272,58 @@ def delete_file(
     auth: AuthContext = Depends(require_admin),
 ) -> None:
     service.delete_file(db, product_file_id, auth)
+
+
+# --- Inventories -------------------------------------------------------
+# low_stock=true 쿼리 파라미터가 "재고 부족 알림" 기능 (stock-reserved <= safety_stock).
+
+
+@router.get("/inventories", response_model=list[InventoryOut])
+def list_inventories(
+    variant_id: int | None = None,
+    low_stock: bool = False,
+    db: Session = Depends(get_db),
+    auth: AuthContext = Depends(require_admin),
+) -> list[InventoryOut]:
+    return service.list_inventories(
+        db, auth, variant_id=variant_id, low_stock_only=low_stock
+    )
+
+
+@router.get("/inventories/{inventory_id}", response_model=InventoryOut)
+def get_inventory(
+    inventory_id: int,
+    db: Session = Depends(get_db),
+    auth: AuthContext = Depends(require_admin),
+) -> InventoryOut:
+    return service.get_inventory(db, inventory_id, auth)
+
+
+@router.post("/inventories", response_model=InventoryOut, status_code=201)
+def create_inventory(
+    payload: InventoryCreate,
+    db: Session = Depends(get_db),
+    auth: AuthContext = Depends(require_admin),
+) -> InventoryOut:
+    return service.create_inventory(db, payload.model_dump(), auth)
+
+
+@router.patch("/inventories/{inventory_id}", response_model=InventoryOut)
+def update_inventory(
+    inventory_id: int,
+    payload: InventoryUpdate,
+    db: Session = Depends(get_db),
+    auth: AuthContext = Depends(require_admin),
+) -> InventoryOut:
+    return service.update_inventory(
+        db, inventory_id, payload.model_dump(exclude_unset=True), auth
+    )
+
+
+@router.delete("/inventories/{inventory_id}", status_code=204)
+def delete_inventory(
+    inventory_id: int,
+    db: Session = Depends(get_db),
+    auth: AuthContext = Depends(require_admin),
+) -> None:
+    service.delete_inventory(db, inventory_id, auth)

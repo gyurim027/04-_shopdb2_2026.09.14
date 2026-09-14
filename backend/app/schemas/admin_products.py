@@ -3,7 +3,7 @@
 from datetime import datetime
 from decimal import Decimal
 
-from pydantic import BaseModel, ConfigDict, Field
+from pydantic import BaseModel, ConfigDict, Field, computed_field
 
 # DB enum(products.product_status) 그대로 사용
 PRODUCT_STATUSES = ("READY", "SALE", "SOLD_OUT", "STOPPED", "DELETED")
@@ -177,3 +177,42 @@ class ProductFileOut(BaseModel):
     file_description: str | None
     display_order: int
     created_at: datetime
+
+
+# --- Inventories -----------------------------------------------------------
+
+
+class InventoryCreate(BaseModel):
+    org_id: int
+    variant_id: int
+    stock_quantity: int = 0
+    reserved_quantity: int = 0
+    safety_stock: int = 0
+
+
+class InventoryUpdate(BaseModel):
+    stock_quantity: int | None = None
+    reserved_quantity: int | None = None
+    safety_stock: int | None = None
+
+
+class InventoryOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    inventory_id: int
+    org_id: int
+    variant_id: int
+    stock_quantity: int
+    reserved_quantity: int
+    safety_stock: int
+    updated_at: datetime
+
+    @computed_field
+    @property
+    def available_quantity(self) -> int:
+        return self.stock_quantity - self.reserved_quantity
+
+    @computed_field
+    @property
+    def is_low_stock(self) -> bool:
+        return (self.stock_quantity - self.reserved_quantity) <= self.safety_stock

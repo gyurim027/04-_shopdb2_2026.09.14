@@ -6,7 +6,14 @@ from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
 from app.dependencies.auth import AuthContext
-from app.models.products import Category, Product, ProductFile, ProductImage, ProductVariant
+from app.models.products import (
+    Category,
+    Inventory,
+    Product,
+    ProductFile,
+    ProductImage,
+    ProductVariant,
+)
 
 
 def get_org_type(db: Session, org_id: int | None) -> str | None:
@@ -23,13 +30,12 @@ def is_super_admin(db: Session, auth: AuthContext) -> bool:
     return get_org_type(db, auth.org_id) == "HEADQUARTER"
 
 
-def require_super_admin(db: Session, auth: AuthContext) -> None:
-    """04_관리자권한매트릭스: categories는 전역 자산이라 쓰기 권한은 최고관리자(HQ)만."""
+def require_super_admin(
+    db: Session, auth: AuthContext, detail: str = "최고관리자만 가능한 작업입니다."
+) -> None:
+    """04_관리자권한매트릭스: 도메인별로 최고관리자(HQ) 전용인 쓰기 작업에 사용."""
     if not is_super_admin(db, auth):
-        raise HTTPException(
-            status_code=status.HTTP_403_FORBIDDEN,
-            detail="최고관리자만 카테고리를 등록/수정/삭제할 수 있습니다.",
-        )
+        raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
 
 
 # --- Categories --------------------------------------------------------
@@ -371,4 +377,89 @@ def delete_file(db: Session, product_file_id: int, auth: AuthContext) -> None:
     require_super_admin(db, auth)  # 지점장은 삭제 불가
     file_row = get_file(db, product_file_id, auth)
     db.delete(file_row)
+    db.commit()
+
+
+# --- Inventories -------------------------------------------------------
+# 04_관리자권한매트릭스: inventories는 org_id 직접 스코프.
+# 최고관리자 CRUD(전체), 지점장은 C/R/U 가능하되 자기 org만, 삭제는 최고관리자 전용.
+
+
+def _assert_org_in_scope(db: Session, org_id: int, auth: AuthContext) -> None:
+    scoped = get_scoped_org_ids(db, auth)
+    if scoped is not None and org_id not in scoped:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="담당 조직의 재고가 아닙니다."
+        )
+
+
+def list_inventories(
+    db: Session,
+    auth: AuthContext,
+    variant_id: int | None = None,
+    low_stock_only: bool = False,
+) -> list[Inventory]:
+    scoped = get_scoped_org_ids(db, auth)
+    query = db.query(Inventory)
+    if scoped is not None:
+        query = query.filter(Inventory.org_id.in_(scoped or [-1]))
+    if variant_id is not None:
+        query = query.filter(Inventory.variant_id == variant_id)
+    if low_stock_only:
+        query = query.filter(
+            (Inventory.stock_quantity - Inventory.reserved_quantity)
+            <= Inventory.safety_stock
+        )
+    return list(query.order_by(Inventory.inventory_id).all())
+
+
+def get_inventory(db: Session, inventory_id: int, auth: AuthContext) -> Inventory:
+    inventory = db.get(Inventory, inventory_id)
+    if inventory is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="재고 정보를 찾을 수 없습니다."
+        )
+    _assert_org_in_scope(db, inventory.org_id, auth)
+    return inventory
+
+
+def create_inventory(db: Session, data: dict, auth: AuthContext) -> Inventory:
+    if not is_super_admin(db, auth):
+        # 지점장은 반드시 자기 org로만 등록 가능
+        if auth.org_id is None or data["org_id"] != auth.org_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="자기 조직의 재고만 등록할 수 있습니다.",
+            )
+    inventory = Inventory(**data)
+    db.add(inventory)
+    try:
+        db.commit()
+    except IntegrityError as exc:
+        db.rollback()
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="이미 해당 조직/옵션 조합의 재고가 존재합니다.",
+        ) from exc
+    db.refresh(inventory)
+    return inventory
+
+
+def update_inventory(
+    db: Session, inventory_id: int, data: dict, auth: AuthContext
+) -> Inventory:
+    inventory = get_inventory(db, inventory_id, auth)  # 스코프 체크 포함
+    for key, value in data.items():
+        if value is not None:
+            setattr(inventory, key, value)
+    db.commit()
+    db.refresh(inventory)
+    return inventory
+
+
+def delete_inventory(db: Session, inventory_id: int, auth: AuthContext) -> None:
+    """지점장은 삭제 불가(04_관리자권한매트릭스), 실제 DELETE(소프트 삭제 컬럼 없음)."""
+    require_super_admin(db, auth, detail="최고관리자만 재고를 삭제할 수 있습니다.")
+    inventory = get_inventory(db, inventory_id, auth)
+    db.delete(inventory)
     db.commit()
