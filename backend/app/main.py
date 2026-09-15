@@ -13,6 +13,7 @@ from app.routers import (
     admin_refunds,
     admin_support,
     admin_users,
+    auth,
     seller_dashboard,
     seller_info,
     seller_inventory,
@@ -55,6 +56,7 @@ def health_db(db: Session = Depends(get_db)) -> dict[str, str | int]:
 
 
 for router in (
+    auth.router,
     admin_users.router,
     admin_products.router,
     admin_orders.router,

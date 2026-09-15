@@ -15,6 +15,11 @@ class AuthContext:
     user_id: int
     roles: tuple[str, ...]
     org_id: int | None = None
+    org_type: str | None = None  # 'HEADQUARTER', 'BRANCH' 등 조직 타입
+
+    @property
+    def is_super_admin(self) -> bool:
+        return "ADMIN" in self.roles and self.org_type == "HEADQUARTER"
 
 
 def get_current_auth(token: str | None = Depends(oauth2_scheme)) -> AuthContext:
@@ -43,10 +48,12 @@ def get_current_auth(token: str | None = Depends(oauth2_scheme)) -> AuthContext:
         raw_roles = [raw_roles]
 
     org_id = payload.get("org_id")
+    org_type = payload.get("org_type")
     return AuthContext(
         user_id=user_id,
         roles=tuple(str(role) for role in raw_roles),
         org_id=int(org_id) if org_id is not None else None,
+        org_type=str(org_type) if org_type is not None else None,
     )
 
 
@@ -64,5 +71,32 @@ def require_seller(auth: AuthContext = Depends(get_current_auth)) -> AuthContext
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="SELLER role required",
+        )
+    return auth
+
+
+def require_customer(auth: AuthContext = Depends(get_current_auth)) -> AuthContext:
+    """
+    Customer API 접근 권한 검사.
+
+    코드에서는 customer라는 이름을 사용하지만,
+    기존 DB 역할값은 BUYER이므로 BUYER 역할을 검사한다.
+
+    DB 구조 및 역할값은 수정하지 않는다.
+    """
+    if "BUYER" not in auth.roles:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="BUYER role required",
+        )
+    return auth
+
+
+def require_super_admin(auth: AuthContext = Depends(get_current_auth)) -> AuthContext:
+    """최고관리자(본사 + ADMIN) 전용 권한 의존성 함수"""
+    if not auth.is_super_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Super admin privileges required",
         )
     return auth
