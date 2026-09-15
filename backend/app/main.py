@@ -19,6 +19,7 @@ from app.routers import (
     customer_payments,
     customer_products,
     customer_profile,
+    customer_refunds,
 )
 
 
@@ -73,6 +74,7 @@ for router in (
     customer_products.router,
     customer_orders.router,
     customer_payments.router,
+    customer_refunds.router,
 ):
     app.include_router(
         router,
