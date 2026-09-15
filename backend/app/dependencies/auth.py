@@ -57,3 +57,12 @@ def require_admin(auth: AuthContext = Depends(get_current_auth)) -> AuthContext:
             detail="ADMIN role required",
         )
     return auth
+
+
+def require_seller(auth: AuthContext = Depends(get_current_auth)) -> AuthContext:
+    if "SELLER" not in auth.roles:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="SELLER role required",
+        )
+    return auth

@@ -13,6 +13,13 @@ from app.routers import (
     admin_refunds,
     admin_support,
     admin_users,
+    seller_dashboard,
+    seller_info,
+    seller_inventory,
+    seller_orders,
+    seller_products,
+    seller_refunds,
+    seller_sales,
 )
 
 
@@ -55,5 +62,12 @@ for router in (
     admin_files.router,
     admin_support.router,
     admin_ai.router,
+    seller_dashboard.router,
+    seller_products.router,
+    seller_inventory.router,
+    seller_orders.router,
+    seller_refunds.router,
+    seller_sales.router,
+    seller_info.router,
 ):
     app.include_router(router, prefix=settings.api_prefix)
