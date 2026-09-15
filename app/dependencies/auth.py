@@ -4,9 +4,11 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jwt import InvalidTokenError
 
+from app.core.config import settings
 from app.core.security import decode_access_token
 
 
+# 팀원 피드백 반영: tokenUrl을 올바른 로그인 경로로 지정
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
 
 
@@ -15,7 +17,7 @@ class AuthContext:
     user_id: int
     roles: tuple[str, ...]
     org_id: int | None = None
-    org_type: str | None = None  # 추가: 'HEADQUARTER', 'BRANCH' 등
+    org_type: str | None = None  # 'HEADQUARTER', 'BRANCH' 등 조직 타입
     
     @property
     def is_super_admin(self) -> bool:
@@ -64,5 +66,15 @@ def require_admin(auth: AuthContext = Depends(get_current_auth)) -> AuthContext:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="ADMIN role required",
+        )
+    return auth
+
+
+def require_super_admin(auth: AuthContext = Depends(get_current_auth)) -> AuthContext:
+    """최고관리자(본사 + ADMIN) 전용 권한 의존성 함수"""
+    if not auth.is_super_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Super admin privileges required",
         )
     return auth
