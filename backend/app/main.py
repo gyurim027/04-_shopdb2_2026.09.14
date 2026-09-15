@@ -13,6 +13,8 @@ from app.routers import (
     admin_refunds,
     admin_support,
     admin_users,
+    customer_auth,
+    customer_profile,
 )
 
 
@@ -33,12 +35,18 @@ app.add_middleware(
 
 @app.get("/health", tags=["System"])
 def health() -> dict[str, str]:
-    return {"status": "ok", "service": "shopdb2-backend"}
+    return {
+        "status": "ok",
+        "service": "shopdb2-backend",
+    }
 
 
 @app.get("/health/db", tags=["System"])
-def health_db(db: Session = Depends(get_db)) -> dict[str, str | int]:
+def health_db(
+    db: Session = Depends(get_db),
+) -> dict[str, str | int]:
     db.execute(text("SELECT 1"))
+
     return {
         "status": "ok",
         "database": settings.db_name,
@@ -55,5 +63,10 @@ for router in (
     admin_files.router,
     admin_support.router,
     admin_ai.router,
+    customer_auth.router,
+    customer_profile.router,
 ):
-    app.include_router(router, prefix=settings.api_prefix)
+    app.include_router(
+        router,
+        prefix=settings.api_prefix,
+    )
