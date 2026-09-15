@@ -13,6 +13,7 @@ from app.routers import (
     admin_refunds,
     admin_support,
     admin_users,
+    customer_addresses,
     customer_auth,
     customer_profile,
 )
@@ -65,6 +66,7 @@ for router in (
     admin_ai.router,
     customer_auth.router,
     customer_profile.router,
+    customer_addresses.router,
 ):
     app.include_router(
         router,
