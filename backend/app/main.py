@@ -24,7 +24,7 @@ from app.routers import (
 
 
 app = FastAPI(
-    title="shopdb2 Admin Backend",
+    title="team4_shopdb2 Backend",
     version="0.1.0",
     description="Shared FastAPI skeleton for the shopdb2 team project.",
 )
