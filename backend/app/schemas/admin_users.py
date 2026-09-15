@@ -109,3 +109,33 @@ class UserRoleUpdate(BaseModel):
     roles: list[int] = Field(..., description="부여할 역할 ID 목록 (예: [1, 2, 3])")
     # 혹은 변수명을 role_ids로 명시하는 것도 직관적입니다.
     # role_ids: list[int] = Field(..., description="부여할 역할 ID 목록")
+
+# --- Seller Profiles -------------------------------------------------------
+
+class SellerProfileCreate(BaseModel):
+    company_name: str = Field(..., max_length=200)
+    business_number: str | None = Field(None, max_length=30)
+    representative_name: str | None = Field(None, max_length=100)
+    settlement_bank: str | None = Field(None, max_length=100)
+    settlement_account: str | None = Field(None, max_length=100)
+
+class SellerProfileUpdate(BaseModel):
+    company_name: str | None = Field(None, max_length=200)
+    business_number: str | None = Field(None, max_length=30)
+    representative_name: str | None = Field(None, max_length=100)
+    settlement_bank: str | None = Field(None, max_length=100)
+    settlement_account: str | None = Field(None, max_length=100)
+    seller_status: str | None = Field(None, max_length=30)
+
+class SellerProfileOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
+    seller_id: int
+    user_id: int
+    company_name: str
+    business_number: str | None
+    representative_name: str | None
+    settlement_bank: str | None
+    settlement_account: str | None
+    seller_status: str
+    created_at: datetime

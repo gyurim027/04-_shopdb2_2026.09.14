@@ -7,8 +7,15 @@ from sqlalchemy.orm import Session
 
 from app.core.security import get_password_hash
 from app.dependencies.auth import AuthContext
-from app.models.users import OrgUnit, User
-from app.schemas.admin_users import OrganizationCreate, OrganizationUpdate, UserCreate, UserUpdate
+from app.models.users import OrgUnit, User, SellerProfile
+from app.schemas.admin_users import (
+    OrganizationCreate, 
+    OrganizationUpdate, 
+    UserCreate, 
+    UserUpdate,
+    SellerProfileCreate,
+    SellerProfileUpdate
+)
 
 def is_super_admin(db: Session, auth: AuthContext) -> bool:
     if auth.org_id is None:
@@ -16,13 +23,11 @@ def is_super_admin(db: Session, auth: AuthContext) -> bool:
     org = db.get(OrgUnit, auth.org_id)
     return org is not None and org.org_type == "HEADQUARTER"
 
-
 def require_super_admin(
     db: Session, auth: AuthContext, detail: str = "최고관리자만 가능한 작업입니다."
 ) -> None:
     if not is_super_admin(db, auth):
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail=detail)
-
 
 def get_scoped_org_ids(db: Session, auth: AuthContext) -> list[int] | None:
     """None이면 전체 접근(최고관리자). 아니면 접근 가능한 org_id 목록(자기 조직 + 하위 조직)."""
@@ -37,7 +42,6 @@ def get_scoped_org_ids(db: Session, auth: AuthContext) -> list[int] | None:
     )
     return [row[0] for row in rows]
 
-
 # --- Organizations (org_units) -------------------------------------------
 
 def get_organizations(
@@ -48,7 +52,6 @@ def get_organizations(
     if scoped is not None:
         query = query.filter(OrgUnit.org_id.in_(scoped or [-1]))
     return query.order_by(OrgUnit.org_id).offset(skip).limit(limit).all()
-
 
 def create_organization(
     db: Session, org_in: OrganizationCreate, auth: AuthContext
@@ -69,7 +72,6 @@ def create_organization(
 def update_organization(
     db: Session, org_id: int, org_in: OrganizationUpdate, auth: AuthContext
 ) -> OrgUnit:
-    # 최고관리자 전용 권한 체크
     require_super_admin(db, auth, "최고관리자만 조직 정보를 수정할 수 있습니다.")
 
     org = db.get(OrgUnit, org_id)
@@ -106,7 +108,6 @@ def get_users(
         query = query.filter(User.org_id.in_(scoped or [-1]))
     return query.order_by(User.user_id).offset(skip).limit(limit).all()
 
-
 def create_user(db: Session, user_in: UserCreate, auth: AuthContext) -> User:
     require_super_admin(db, auth, "최고관리자만 회원을 등록할 수 있습니다.")
     user = User(
@@ -129,7 +130,6 @@ def create_user(db: Session, user_in: UserCreate, auth: AuthContext) -> User:
     db.refresh(user)
     return user
 
-
 # --- My Profile (내 정보 조회 및 수정) -----------------------------------
 
 def get_my_info(db: Session, auth: AuthContext) -> User:
@@ -139,7 +139,6 @@ def get_my_info(db: Session, auth: AuthContext) -> User:
             status_code=status.HTTP_404_NOT_FOUND, detail="사용자를 찾을 수 없습니다."
         )
     return user
-
 
 def update_my_info(db: Session, auth: AuthContext, user_in: UserUpdate) -> User:
     user = db.query(User).filter(User.user_id == auth.user_id).first()
@@ -166,7 +165,6 @@ def update_my_info(db: Session, auth: AuthContext, user_in: UserUpdate) -> User:
     db.refresh(user)
     return user
 
-
 # --- 회원 상세 조회 --------------------------------------------------------
 
 def get_user_detail(db: Session, auth: AuthContext, user_id: int) -> User:
@@ -177,7 +175,6 @@ def get_user_detail(db: Session, auth: AuthContext, user_id: int) -> User:
             detail="해당 회원을 찾을 수 없습니다."
         )
     
-    # 지점장인 경우 본인 조직 스코프 내의 회원인지 권한 검증
     scoped = get_scoped_org_ids(db, auth)
     if scoped is not None:
         if user.org_id not in scoped:
@@ -187,7 +184,6 @@ def get_user_detail(db: Session, auth: AuthContext, user_id: int) -> User:
             )
             
     return user
-
 
 # --- 회원 상태 변경 --------------------------------------------------------
 
@@ -218,7 +214,6 @@ def update_user_status(db: Session, auth: AuthContext, user_id: int, new_status:
     db.refresh(user)
     return user
 
-
 # --- 역할 부여/회수 (최고관리자 전용) ----------------------------------------
 
 def update_user_roles(db: Session, auth: AuthContext, user_id: int, role_ids: list[int]) -> User:
@@ -232,13 +227,11 @@ def update_user_roles(db: Session, auth: AuthContext, user_id: int, role_ids: li
         )
     
     try:
-        # 기존 역할 일괄 삭제
         db.execute(
             text("DELETE FROM user_roles WHERE user_id = :user_id"), 
             {"user_id": user_id}
         )
         
-        # 새로운 역할 ID 목록 일괄 등록 (user_id, role_id 컬럼 반영)
         for role_id in role_ids:
             db.execute(
                 text("INSERT INTO user_roles (user_id, role_id) VALUES (:user_id, :role_id)"),
@@ -255,3 +248,54 @@ def update_user_roles(db: Session, auth: AuthContext, user_id: int, role_ids: li
 
     db.refresh(user)
     return user
+
+# --- 판매자 프로필 관리 ----------------------------------------------------
+
+def get_seller_profile(db: Session, auth: AuthContext, user_id: int) -> SellerProfile:
+    get_user_detail(db, auth, user_id)
+    
+    profile = db.query(SellerProfile).filter(SellerProfile.user_id == user_id).first()
+    if not profile:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="해당 회원의 판매자 프로필이 존재하지 않습니다."
+        )
+    return profile
+
+def create_seller_profile(
+    db: Session, auth: AuthContext, user_id: int, profile_in: SellerProfileCreate
+) -> SellerProfile:
+    get_user_detail(db, auth, user_id)
+    
+    existing = db.query(SellerProfile).filter(SellerProfile.user_id == user_id).first()
+    if existing:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="이미 판매자 프로필이 존재합니다."
+        )
+    
+    profile = SellerProfile(user_id=user_id, **profile_in.model_dump())
+    db.add(profile)
+    db.commit()
+    db.refresh(profile)
+    return profile
+
+def update_seller_profile(
+    db: Session, auth: AuthContext, user_id: int, profile_in: SellerProfileUpdate
+) -> SellerProfile:
+    get_user_detail(db, auth, user_id)
+    
+    profile = db.query(SellerProfile).filter(SellerProfile.user_id == user_id).first()
+    if not profile:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="해당 회원의 판매자 프로필이 존재하지 않습니다."
+        )
+    
+    update_data = profile_in.model_dump(exclude_unset=True)
+    for key, value in update_data.items():
+        setattr(profile, key, value)
+        
+    db.commit()
+    db.refresh(profile)
+    return profile
