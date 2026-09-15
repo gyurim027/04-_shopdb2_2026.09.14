@@ -2,6 +2,7 @@
 
 from datetime import datetime
 from typing import Optional
+from decimal import Decimal
 from pydantic import BaseModel, ConfigDict, Field
 
 # 주문 상태 변경 요청 스키마
@@ -12,21 +13,41 @@ class OrderStatusUpdate(BaseModel):
 class OrderResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    order_id: int = Field(..., alias="order_id")  # id -> order_id 수정
-    buyer_user_id: int                            # user_id -> buyer_user_id 수정
-    order_status: str                             # status -> order_status 수정
-    total_amount: float
-    created_at: datetime
+    order_id: int
+    order_no: str
+    buyer_user_id: int
+    org_id: int
+    order_status: str
+    product_amount: Decimal
+    discount_amount: Decimal
+    shipping_amount: Decimal
+    total_amount: Decimal
+    receiver_name: Optional[str] = None
+    receiver_phone: Optional[str] = None
+    zipcode: Optional[str] = None
+    shipping_address1: Optional[str] = None
+    shipping_address2: Optional[str] = None
+    ordered_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
 # 결제/정산 내역 응답 스키마
 class SettlementResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
-    payment_id: int = Field(..., alias="payment_id") # id -> payment_id 수정
+    payment_id: int
     order_id: int
-    amount: float
-    payment_status: str                           # status -> payment_status 수정
+    pg_provider: str
+    payment_key: Optional[str] = None
+    pg_order_id: Optional[str] = None
     payment_method: Optional[str] = None
-    approved_at: Optional[datetime] = None        # 승인 일시 추가
-    receipt_url: Optional[str] = None             # 영수증 URL 추가
+    payment_status: Optional[str] = None
+    requested_amount: Decimal
+    approved_amount: Decimal
+    cancelled_amount: Decimal
+    balance_amount: Decimal
+    currency: str
+    receipt_url: Optional[str] = None
+    requested_at: Optional[datetime] = None
+    approved_at: Optional[datetime] = None
+    cancelled_at: Optional[datetime] = None
     created_at: datetime
