@@ -8,7 +8,7 @@ from app.core.security import decode_access_token
 
 
 oauth2_scheme = OAuth2PasswordBearer(
-    tokenUrl="/api/customer/auth/login",
+    tokenUrl="/api/auth/login",
     auto_error=False,
 )
 
@@ -18,6 +18,11 @@ class AuthContext:
     user_id: int
     roles: tuple[str, ...]
     org_id: int | None = None
+    org_type: str | None = None
+
+    @property
+    def is_super_admin(self) -> bool:
+        return "ADMIN" in self.roles and self.org_type == "HEADQUARTER"
 
 
 def get_current_auth(
@@ -30,6 +35,7 @@ def get_current_auth(
     - sub: user_id
     - roles: 사용자의 역할 목록
     - org_id: 소속 조직 ID
+    - org_type: 소속 조직 타입
     """
 
     if not token:
@@ -40,7 +46,6 @@ def get_current_auth(
 
     try:
         payload = decode_access_token(token)
-
         user_id = int(payload["sub"])
 
     except (
@@ -60,18 +65,13 @@ def get_current_auth(
         raw_roles = [raw_roles]
 
     org_id = payload.get("org_id")
+    org_type = payload.get("org_type")
 
     return AuthContext(
         user_id=user_id,
-        roles=tuple(
-            str(role)
-            for role in raw_roles
-        ),
-        org_id=(
-            int(org_id)
-            if org_id is not None
-            else None
-        ),
+        roles=tuple(str(role) for role in raw_roles),
+        org_id=int(org_id) if org_id is not None else None,
+        org_type=str(org_type) if org_type is not None else None,
     )
 
 
@@ -79,7 +79,7 @@ def require_admin(
     auth: AuthContext = Depends(get_current_auth),
 ) -> AuthContext:
     """
-    ADMIN 역할이 있는 사용자만 접근 가능.
+    ADMIN 역할이 있는 사용자만 접근 가능하다.
     """
 
     if "ADMIN" not in auth.roles:
@@ -91,22 +91,52 @@ def require_admin(
     return auth
 
 
+def require_seller(
+    auth: AuthContext = Depends(get_current_auth),
+) -> AuthContext:
+    """
+    SELLER 역할이 있는 사용자만 접근 가능하다.
+    """
+
+    if "SELLER" not in auth.roles:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="SELLER role required",
+        )
+
+    return auth
+
+
 def require_customer(
     auth: AuthContext = Depends(get_current_auth),
 ) -> AuthContext:
     """
-    Customer API 접근 권한 검사.
+    Customer API 접근 권한을 검사한다.
 
-    코드에서는 customer라는 이름을 사용하지만,
-    기존 DB 역할값은 BUYER이므로 BUYER 역할을 검사한다.
-
-    DB 구조 및 역할값은 수정하지 않는다.
+    Python 코드에서는 customer라는 이름을 사용하지만,
+    기존 DB 역할 값은 BUYER이므로 BUYER 역할을 검사한다.
     """
 
     if "BUYER" not in auth.roles:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="BUYER role required",
+        )
+
+    return auth
+
+
+def require_super_admin(
+    auth: AuthContext = Depends(get_current_auth),
+) -> AuthContext:
+    """
+    본사(HEADQUARTER) 소속 ADMIN 사용자만 접근 가능하다.
+    """
+
+    if not auth.is_super_admin:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Super admin privileges required",
         )
 
     return auth

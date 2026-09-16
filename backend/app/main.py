@@ -23,11 +23,18 @@ from app.routers import (
     customer_profile,
     customer_refunds,
     customer_support,
+    seller_dashboard,
+    seller_info,
+    seller_inventory,
+    seller_orders,
+    seller_products,
+    seller_refunds,
+    seller_sales,
 )
 
 
 app = FastAPI(
-    title="shopdb2 Admin Backend",
+    title="team4_shopdb2 Backend",
     version="0.1.0",
     description="Shared FastAPI skeleton for the shopdb2 team project.",
 )
@@ -64,6 +71,7 @@ def health_db(
 
 
 for router in (
+    auth.router,
     admin_users.router,
     admin_products.router,
     admin_orders.router,
@@ -71,7 +79,6 @@ for router in (
     admin_files.router,
     admin_support.router,
     admin_ai.router,
-    auth.router,
     customer_auth.router,
     customer_profile.router,
     customer_addresses.router,
@@ -81,6 +88,13 @@ for router in (
     customer_refunds.router,
     customer_support.router,
     customer_ai.router,
+    seller_dashboard.router,
+    seller_products.router,
+    seller_inventory.router,
+    seller_orders.router,
+    seller_refunds.router,
+    seller_sales.router,
+    seller_info.router,
 ):
     app.include_router(
         router,
