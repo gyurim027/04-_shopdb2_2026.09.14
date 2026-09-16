@@ -4,12 +4,13 @@ from fastapi import Depends, HTTPException, status
 from fastapi.security import OAuth2PasswordBearer
 from jwt import InvalidTokenError
 
-from app.core.config import settings
 from app.core.security import decode_access_token
 
 
-# 팀원 피드백 반영: tokenUrl을 올바른 로그인 경로로 지정
-oauth2_scheme = OAuth2PasswordBearer(tokenUrl="/api/auth/login", auto_error=False)
+oauth2_scheme = OAuth2PasswordBearer(
+    tokenUrl="/api/auth/login",
+    auto_error=False,
+)
 
 
 @dataclass(frozen=True)
@@ -24,13 +25,19 @@ class AuthContext:
         # 팀원 피드백 반영: ADMIN 역할이 포함되어 있으면서 org_type이 HEADQUARTER인 경우만 참
         return "ADMIN" in self.roles and self.org_type == "HEADQUARTER"
 
-
-def get_current_auth(token: str | None = Depends(oauth2_scheme)) -> AuthContext:
-    """Decode common auth claims without importing a domain model.
-
-    Domain owners can later connect login/user DB validation while keeping this
-    dependency path stable for all A/B/C code.
+def get_current_auth(
+    token: str | None = Depends(oauth2_scheme),
+) -> AuthContext:
     """
+    JWT 토큰을 해석해서 현재 로그인 사용자의 인증 정보를 반환한다.
+
+    JWT에서 사용하는 정보:
+    - sub: user_id
+    - roles: 사용자의 역할 목록
+    - org_id: 소속 조직 ID
+    - org_type: 소속 조직 타입
+    """
+
     if not token:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
@@ -40,13 +47,20 @@ def get_current_auth(token: str | None = Depends(oauth2_scheme)) -> AuthContext:
     try:
         payload = decode_access_token(token)
         user_id = int(payload["sub"])
-    except (InvalidTokenError, KeyError, TypeError, ValueError) as exc:
+
+    except (
+        InvalidTokenError,
+        KeyError,
+        TypeError,
+        ValueError,
+    ) as exc:
         raise HTTPException(
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid or expired token",
         ) from exc
 
     raw_roles = payload.get("roles", [])
+
     if isinstance(raw_roles, str):
         raw_roles = [raw_roles]
 
@@ -61,20 +75,68 @@ def get_current_auth(token: str | None = Depends(oauth2_scheme)) -> AuthContext:
     )
 
 
-def require_admin(auth: AuthContext = Depends(get_current_auth)) -> AuthContext:
+def require_admin(
+    auth: AuthContext = Depends(get_current_auth),
+) -> AuthContext:
+    """
+    ADMIN 역할이 있는 사용자만 접근 가능하다.
+    """
+
     if "ADMIN" not in auth.roles:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="ADMIN role required",
         )
+
     return auth
 
 
-def require_super_admin(auth: AuthContext = Depends(get_current_auth)) -> AuthContext:
-    """최고관리자(본사 + ADMIN) 전용 권한 의존성 함수"""
+def require_seller(
+    auth: AuthContext = Depends(get_current_auth),
+) -> AuthContext:
+    """
+    SELLER 역할이 있는 사용자만 접근 가능하다.
+    """
+
+    if "SELLER" not in auth.roles:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="SELLER role required",
+        )
+
+    return auth
+
+
+def require_customer(
+    auth: AuthContext = Depends(get_current_auth),
+) -> AuthContext:
+    """
+    Customer API 접근 권한을 검사한다.
+
+    Python 코드에서는 customer라는 이름을 사용하지만,
+    기존 DB 역할 값은 BUYER이므로 BUYER 역할을 검사한다.
+    """
+
+    if "BUYER" not in auth.roles:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="BUYER role required",
+        )
+
+    return auth
+
+
+def require_super_admin(
+    auth: AuthContext = Depends(get_current_auth),
+) -> AuthContext:
+    """
+    본사(HEADQUARTER) 소속 ADMIN 사용자만 접근 가능하다.
+    """
+
     if not auth.is_super_admin:
         raise HTTPException(
             status_code=status.HTTP_403_FORBIDDEN,
             detail="Super admin privileges required",
         )
+
     return auth
