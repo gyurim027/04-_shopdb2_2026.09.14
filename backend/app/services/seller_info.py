@@ -1,8 +1,8 @@
 """Service layer for seller_info (S-INFO-01~03 + S-SALES-05 정산계좌).
 
-seller_profiles는 이번에 규림님 소유로 신설한 도메인(models/seller_profiles.py)이라 ORM을
-쓰지만, users 테이블은 명현님 소유(models/users.py)라 §10 규칙에 따라 조인이 필요한 이름/이메일/
-전화번호 조회는 raw SQL로 처리한다.
+seller_profiles는 사용자/조직 도메인(명현님 소유 models/users.py)에 SellerProfile로
+매핑되어 있다. users 테이블도 같은 파일 소유라 §10 규칙과 무관하게 ForeignKey가 걸려 있지만,
+조인이 필요한 이름/이메일/전화번호 조회는 기존 관례대로 raw SQL로 처리한다.
 """
 
 from fastapi import HTTPException, status
@@ -10,7 +10,7 @@ from sqlalchemy import text
 from sqlalchemy.orm import Session
 
 from app.dependencies.auth import AuthContext
-from app.models.seller_profiles import SellerProfile
+from app.models.users import SellerProfile
 
 
 def _get_owned_profile(db: Session, auth: AuthContext) -> SellerProfile:
