@@ -1,6 +1,9 @@
-from pydantic import BaseModel, Field
-from typing import Optional
+"""Pydantic schemas for admin_orders (orders, payments/settlements)."""
+
 from datetime import datetime
+from typing import Optional
+from decimal import Decimal
+from pydantic import BaseModel, ConfigDict, Field
 
 # 주문 상태 변경 요청 스키마
 class OrderStatusUpdate(BaseModel):
@@ -8,23 +11,43 @@ class OrderStatusUpdate(BaseModel):
 
 # 주문 응답 스키마
 class OrderResponse(BaseModel):
-    id: int
-    user_id: int
-    status: str
-    total_amount: float
-    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
 
-    class Config:
-        from_attributes = True
+    order_id: int
+    order_no: str
+    buyer_user_id: int
+    org_id: int
+    order_status: str
+    product_amount: Decimal
+    discount_amount: Decimal
+    shipping_amount: Decimal
+    total_amount: Decimal
+    receiver_name: Optional[str] = None
+    receiver_phone: Optional[str] = None
+    zipcode: Optional[str] = None
+    shipping_address1: Optional[str] = None
+    shipping_address2: Optional[str] = None
+    ordered_at: Optional[datetime] = None
+    updated_at: Optional[datetime] = None
 
 # 결제/정산 내역 응답 스키마
 class SettlementResponse(BaseModel):
-    id: int
-    order_id: int
-    amount: float
-    status: str
-    payment_method: Optional[str] = None
-    created_at: datetime
+    model_config = ConfigDict(from_attributes=True)
 
-    class Config:
-        from_attributes = True
+    payment_id: int
+    order_id: int
+    pg_provider: str
+    payment_key: Optional[str] = None
+    pg_order_id: Optional[str] = None
+    payment_method: Optional[str] = None
+    payment_status: Optional[str] = None
+    requested_amount: Decimal
+    approved_amount: Decimal
+    cancelled_amount: Decimal
+    balance_amount: Decimal
+    currency: str
+    receipt_url: Optional[str] = None
+    requested_at: Optional[datetime] = None
+    approved_at: Optional[datetime] = None
+    cancelled_at: Optional[datetime] = None
+    created_at: datetime

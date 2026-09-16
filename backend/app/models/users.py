@@ -57,3 +57,19 @@ class User(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()
     )
+
+
+class SellerProfile(Base):
+    __tablename__ = "seller_profiles"
+
+    seller_id: Mapped[int] = mapped_column(primary_key=True, autoincrement=True)
+    user_id: Mapped[int] = mapped_column(
+        ForeignKey("users.user_id"), unique=True, nullable=False
+    )
+    company_name: Mapped[str] = mapped_column(String(200), nullable=False)
+    business_number: Mapped[str | None] = mapped_column(String(30), nullable=True)
+    representative_name: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    settlement_bank: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    settlement_account: Mapped[str | None] = mapped_column(String(100), nullable=True)
+    seller_status: Mapped[str] = mapped_column(String(30), nullable=False, default="ACTIVE")
+    created_at: Mapped[datetime] = mapped_column(DateTime, server_default=func.now())

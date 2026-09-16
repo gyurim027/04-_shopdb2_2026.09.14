@@ -18,12 +18,12 @@ class AuthContext:
     user_id: int
     roles: tuple[str, ...]
     org_id: int | None = None
-    org_type: str | None = None
-
+    org_type: str | None = None  # 'HEADQUARTER', 'BRANCH' 등 조직 타입
+    
     @property
     def is_super_admin(self) -> bool:
+        # 팀원 피드백 반영: ADMIN 역할이 포함되어 있으면서 org_type이 HEADQUARTER인 경우만 참
         return "ADMIN" in self.roles and self.org_type == "HEADQUARTER"
-
 
 def get_current_auth(
     token: str | None = Depends(oauth2_scheme),
@@ -66,7 +66,7 @@ def get_current_auth(
 
     org_id = payload.get("org_id")
     org_type = payload.get("org_type")
-
+    
     return AuthContext(
         user_id=user_id,
         roles=tuple(str(role) for role in raw_roles),
