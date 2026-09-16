@@ -1,0 +1,50 @@
+/* 프로젝트 전체에서 공통으로 사용하는 디자인 기준값입니다. */
+:root {
+  /* 주요 색상 */
+  --color-primary: #0075de;
+  --color-primary-active: #005bab;
+
+  /* 배경과 카드 */
+  --color-canvas: #fbfbfb;
+  --color-surface: #ffffff;
+
+  /* 글자 색상 */
+  --color-ink: #000000;
+  --color-ink-secondary: #31302e;
+  --color-ink-muted: #615d59;
+  --color-ink-faint: #a39e98;
+
+  /* 테두리 */
+  --color-hairline: #e6e6e6;
+
+  /* 간격 */
+  --space-xxs: 4px;
+  --space-xs: 8px;
+  --space-sm: 12px;
+  --space-md: 16px;
+  --space-lg: 24px;
+  --space-xl: 28px;
+  --space-xxl: 32px;
+
+  /* 모서리 */
+  --radius-xs: 4px;
+  --radius-sm: 5px;
+  --radius-md: 8px;
+  --radius-lg: 12px;
+  --radius-xl: 16px;
+  --radius-full: 9999px;
+
+  /* 글자 크기 */
+  --font-size-caption: 14px;
+  --font-size-body-sm: 15px;
+  --font-size-body-md: 16px;
+  --font-size-title: 20px;
+  --font-size-heading-3: 22px;
+  --font-size-heading-2: 26px;
+  --font-size-heading-1: 40px;
+
+  /* 카드와 팝업에 사용할 약한 그림자 */
+  --shadow-soft:
+    0 1px 2px rgb(0 0 0 / 3%),
+    0 4px 12px rgb(0 0 0 / 4%);
+}

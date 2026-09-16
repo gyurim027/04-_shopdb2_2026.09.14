@@ -1,20 +1,4 @@
+/* 최상위 React 영역이 화면 전체 높이를 사용하도록 합니다. */
 #root {
   min-height: 100vh;
-}
-
-.app {
-  min-height: 100vh;
-  padding: var(--space-xxl);
-}
-
-.app h1 {
-  margin: 0 0 var(--space-sm);
-  color: var(--color-ink);
-  font-size: 32px;
-}
-
-.app p {
-  margin: 0;
-  color: var(--color-ink-muted);
-  font-size: var(--font-size-body-md);
 }
