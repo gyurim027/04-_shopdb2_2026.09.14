@@ -19,7 +19,7 @@ def _get_user_roles(
     user_id: int,
 ) -> list[str]:
     """
-    사용자가 보유한 역할 목록 조회.
+    사용자가 보유한 역할 목록을 조회한다.
 
     BUYER / SELLER / ADMIN 등
     roles 테이블에 연결된 역할을 모두 반환한다.
@@ -55,10 +55,10 @@ def _get_org_type(
     org_id: int | None,
 ) -> str | None:
     """
-    사용자가 속한 조직의 org_type 조회.
+    사용자가 속한 조직의 org_type을 조회한다.
 
     일반 고객처럼 org_id가 없는 경우
-    org_type도 None을 반환한다.
+    org_type은 None을 반환한다.
     """
 
     if org_id is None:
@@ -111,7 +111,7 @@ def login(
     login_in: LoginRequest,
 ) -> TokenResponse:
     """
-    BUYER / SELLER / ADMIN 공통 로그인.
+    BUYER / SELLER / ADMIN 공용 로그인.
 
     처리 순서:
     1. login_id로 사용자 조회

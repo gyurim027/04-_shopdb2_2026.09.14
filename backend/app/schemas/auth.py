@@ -3,7 +3,7 @@ from pydantic import BaseModel, Field
 
 class LoginRequest(BaseModel):
     """
-    BUYER / SELLER / ADMIN 공통 로그인 요청.
+    BUYER / SELLER / ADMIN 공용 로그인 요청.
     """
 
     login_id: str = Field(
@@ -19,7 +19,7 @@ class LoginRequest(BaseModel):
 
 class AuthUserResponse(BaseModel):
     """
-    공통 로그인 성공 시 반환할 사용자 정보.
+    공용 로그인 성공 시 반환하는 사용자 정보.
     """
 
     user_id: int
@@ -45,7 +45,7 @@ class AuthUserResponse(BaseModel):
 
 class TokenResponse(BaseModel):
     """
-    공통 로그인 성공 응답.
+    공용 로그인 성공 응답.
     """
 
     access_token: str

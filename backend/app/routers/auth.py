@@ -24,7 +24,7 @@ def login(
     db: Session = Depends(get_db),
 ) -> TokenResponse:
     """
-    BUYER / SELLER / ADMIN 공통 로그인.
+    BUYER / SELLER / ADMIN 공용 로그인.
 
     로그인 성공 시 사용자의 역할과 조직 정보를 포함한
     JWT access token을 발급한다.
