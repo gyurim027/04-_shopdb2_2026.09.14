@@ -1,13 +1,20 @@
 import { createContext, useContext, useEffect, useMemo, useState } from 'react'
 import { customerApi } from '../api/customer'
-import { setToken } from '../api/client'
+import { getToken, setToken } from '../api/client'
 
 const AuthContext = createContext(null)
 
+function readStoredUser() {
+  try {
+    const value = JSON.parse(localStorage.getItem('shopdb2_user') || 'null')
+    return getToken() ? value : null
+  } catch {
+    return null
+  }
+}
+
 export function AuthProvider({ children }) {
-  const [user, setUser] = useState(() => {
-    try { return JSON.parse(localStorage.getItem('shopdb2_user') || 'null') } catch { return null }
-  })
+  const [user, setUser] = useState(readStoredUser)
   const [loading, setLoading] = useState(false)
 
   useEffect(() => {
@@ -15,11 +22,23 @@ export function AuthProvider({ children }) {
     else localStorage.removeItem('shopdb2_user')
   }, [user])
 
+  useEffect(() => {
+    const expire = () => setUser(null)
+    window.addEventListener('shopdb2:auth-expired', expire)
+    return () => window.removeEventListener('shopdb2:auth-expired', expire)
+  }, [])
+
   const login = async (loginId, password) => {
     setLoading(true)
     try {
       const data = await customerApi.login({ login_id: loginId, password })
-      if (!data.user?.roles?.includes('BUYER')) throw new Error('고객(BUYER) 계정만 이용할 수 있습니다.')
+      const roles = data.user?.roles || []
+
+      if (!roles.includes('BUYER')) {
+        setToken(null)
+        throw new Error('고객(BUYER) 권한이 있는 계정만 고객몰에 로그인할 수 있습니다.')
+      }
+
       setToken(data.access_token)
       setUser(data.user)
       return data.user
@@ -39,7 +58,16 @@ export function AuthProvider({ children }) {
     return profile
   }
 
-  const value = useMemo(() => ({ user, isLoggedIn: !!user, loading, login, logout, refreshProfile }), [user, loading])
+  const value = useMemo(() => ({
+    user,
+    isLoggedIn: Boolean(user && getToken()),
+    hasBuyerRole: Boolean(user?.roles?.includes('BUYER')),
+    loading,
+    login,
+    logout,
+    refreshProfile,
+  }), [user, loading])
+
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>
 }
 

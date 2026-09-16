@@ -16,6 +16,19 @@ export function resolveMediaUrl(url) {
   return `${BACKEND_ORIGIN}${url.startsWith('/') ? '' : '/'}${url}`
 }
 
+function normalizeErrorMessage(payload, status) {
+  if (typeof payload === 'object' && payload?.detail) {
+    if (Array.isArray(payload.detail)) return payload.detail.map((item) => item.msg).join(', ')
+    if (typeof payload.detail === 'string') return payload.detail
+  }
+
+  if (status === 401) return '로그인이 만료되었거나 인증 정보가 올바르지 않습니다.'
+  if (status === 403) return '이 기능을 사용할 권한이 없습니다.'
+  if (status === 404) return '요청한 정보를 찾을 수 없습니다.'
+  if (status >= 500) return '서버 오류가 발생했습니다. 잠시 후 다시 시도해주세요.'
+  return `요청에 실패했습니다. (${status})`
+}
+
 export async function apiRequest(path, options = {}) {
   const token = getToken()
   const headers = new Headers(options.headers || {})
@@ -26,10 +39,17 @@ export async function apiRequest(path, options = {}) {
   }
   if (token) headers.set('Authorization', `Bearer ${token}`)
 
-  const response = await fetch(`${API_BASE_URL}${path}`, {
-    ...options,
-    headers,
-  })
+  let response
+  try {
+    response = await fetch(`${API_BASE_URL}${path}`, {
+      ...options,
+      headers,
+    })
+  } catch {
+    const error = new Error('백엔드 서버에 연결할 수 없습니다. 서버 실행 상태를 확인해주세요.')
+    error.status = 0
+    throw error
+  }
 
   if (response.status === 204) return null
 
@@ -39,10 +59,13 @@ export async function apiRequest(path, options = {}) {
     : await response.text()
 
   if (!response.ok) {
-    const detail = typeof payload === 'object' && payload?.detail
-      ? (Array.isArray(payload.detail) ? payload.detail.map((x) => x.msg).join(', ') : payload.detail)
-      : `요청에 실패했습니다. (${response.status})`
-    const error = new Error(detail)
+    if (response.status === 401 && token) {
+      setToken(null)
+      localStorage.removeItem('shopdb2_user')
+      window.dispatchEvent(new CustomEvent('shopdb2:auth-expired'))
+    }
+
+    const error = new Error(normalizeErrorMessage(payload, response.status))
     error.status = response.status
     error.payload = payload
     throw error
