@@ -1,15 +1,98 @@
+import { useEffect, useMemo, useState } from 'react'
+import { useNavigate } from 'react-router-dom'
+
+import { getSellerDashboard } from '../services/sellerDashboardService'
 import './DashboardPage.css'
 
-// 상품 상태별 수치는 백엔드 연결 전까지 임시 값으로 표시합니다.
-const productStatuses = [
-  { label: '전체 상품', value: '—' },
-  { label: '판매중', value: '—' },
-  { label: '품절', value: '—' },
-  { label: '판매중지', value: '—' },
-  { label: '준비중', value: '—' },
+// 백엔드 상품 상태 코드와 화면의 한글 이름을 연결합니다.
+const productStatusOptions = [
+  { label: '전체 상품', code: 'ALL' },
+  { label: '판매중', code: 'SALE' },
+  { label: '품절', code: 'SOLD_OUT' },
+  { label: '판매중지', code: 'STOPPED' },
+  { label: '준비중', code: 'READY' },
 ]
 
+// 숫자에 천 단위 쉼표를 표시합니다.
+function formatNumber(value) {
+  return Number(value ?? 0).toLocaleString('ko-KR')
+}
+
+// 금액에 천 단위 쉼표와 원 단위를 표시합니다.
+function formatCurrency(value) {
+  return `${formatNumber(value)}원`
+}
+
 function DashboardPage() {
+  const navigate = useNavigate()
+
+  // 백엔드에서 받은 대시보드 데이터를 저장합니다.
+  const [dashboard, setDashboard] = useState(null)
+
+  // 주문과 매출을 조회할 기간입니다. 기본값은 최근 7일입니다.
+  const [periodDays, setPeriodDays] = useState(7)
+
+  const [isLoading, setIsLoading] = useState(true)
+  const [errorMessage, setErrorMessage] = useState('')
+
+  useEffect(() => {
+    let isActive = true
+
+    async function loadDashboard() {
+      setIsLoading(true)
+      setErrorMessage('')
+
+      try {
+        const data = await getSellerDashboard(periodDays)
+
+        // 다른 페이지로 이동한 뒤에는 데이터를 저장하지 않습니다.
+        if (isActive) {
+          setDashboard(data)
+        }
+      } catch (error) {
+        if (isActive) {
+          setErrorMessage(error.message)
+        }
+      } finally {
+        if (isActive) {
+          setIsLoading(false)
+        }
+      }
+    }
+
+    loadDashboard()
+
+    return () => {
+      isActive = false
+    }
+  }, [periodDays])
+
+  // 상품 상태별 API 응답을 화면 카드에서 사용하기 쉽게 변환합니다.
+  const productStatuses = useMemo(() => {
+    const statusList = dashboard?.productStatus ?? []
+
+    const statusCountMap = Object.fromEntries(
+      statusList.map((item) => [item.product_status, item.count]),
+    )
+
+    const totalCount = statusList.reduce(
+      (total, item) => total + Number(item.count),
+      0,
+    )
+
+    return productStatusOptions.map((status) => ({
+      ...status,
+      value:
+        status.code === 'ALL'
+          ? totalCount
+          : Number(statusCountMap[status.code] ?? 0),
+    }))
+  }, [dashboard])
+
+  function handlePeriodChange(event) {
+    setPeriodDays(Number(event.target.value))
+  }
+
   return (
     <section className="dashboard-page">
       <div className="dashboard-heading">
@@ -18,10 +101,22 @@ function DashboardPage() {
           <p>상품, 주문, 매출, 재고와 환불 현황을 확인하세요.</p>
         </div>
 
-        <button className="primary-button" type="button">
+        <button
+          className="primary-button"
+          type="button"
+          onClick={() => navigate('/products')}
+        >
           상품 등록
         </button>
       </div>
+
+      {/* API 요청이 실패했을 때 오류 내용을 표시합니다. */}
+      {errorMessage && (
+        <div className="empty-state compact" role="alert">
+          <strong>대시보드 데이터를 불러오지 못했습니다.</strong>
+          <span>{errorMessage}</span>
+        </div>
+      )}
 
       {/* S-DASH-01 상품 상태 요약 */}
       <section className="dashboard-section">
@@ -37,10 +132,13 @@ function DashboardPage() {
             <button
               className="product-status-card"
               type="button"
-              key={status.label}
+              key={status.code}
+              onClick={() => navigate('/products')}
             >
               <span>{status.label}</span>
-              <strong>{status.value}</strong>
+              <strong>
+                {isLoading ? '—' : formatNumber(status.value)}
+              </strong>
             </button>
           ))}
         </div>
@@ -55,41 +153,57 @@ function DashboardPage() {
               <p>기간별 주문과 상품 수를 확인합니다.</p>
             </div>
 
-            <select aria-label="주문 조회 기간" defaultValue="7days">
-              <option value="7days">최근 7일</option>
-              <option value="30days">최근 30일</option>
-              <option value="90days">최근 3개월</option>
+            <select
+              aria-label="주문 조회 기간"
+              value={periodDays}
+              onChange={handlePeriodChange}
+            >
+              <option value={7}>최근 7일</option>
+              <option value={30}>최근 30일</option>
+              <option value={90}>최근 3개월</option>
             </select>
           </div>
 
           <div className="metric-grid">
             <div className="metric-item">
               <span>주문 건수</span>
-              <strong>—</strong>
+              <strong>
+                {isLoading
+                  ? '—'
+                  : formatNumber(dashboard?.orders?.order_count)}
+              </strong>
             </div>
 
             <div className="metric-item">
               <span>주문 상품 수</span>
-              <strong>—</strong>
+              <strong>
+                {isLoading
+                  ? '—'
+                  : formatNumber(dashboard?.orders?.item_quantity)}
+              </strong>
             </div>
           </div>
 
           <div className="status-summary">
-            <span>주문 상태별 건수</span>
-            <p>API 연결 후 상태별 주문 건수가 표시됩니다.</p>
+            <span>주문 조회 기간</span>
+            <p>현재 최근 {periodDays}일의 주문을 집계하고 있습니다.</p>
           </div>
 
           <div className="panel-subheading">
             <strong>최근 주문</strong>
 
-            <button className="text-button" type="button">
+            <button
+              className="text-button"
+              type="button"
+              onClick={() => navigate('/orders')}
+            >
               전체 보기
             </button>
           </div>
 
           <div className="empty-state compact">
-            <strong>표시할 주문 데이터가 없습니다.</strong>
-            <span>최근 주문 내역이 이곳에 표시됩니다.</span>
+            <strong>주문 상세 내역</strong>
+            <span>주문 관리 메뉴에서 전체 주문을 확인할 수 있습니다.</span>
           </div>
         </section>
 
@@ -101,34 +215,46 @@ function DashboardPage() {
               <p>상품 판매액 기준의 매출 현황입니다.</p>
             </div>
 
-            <select aria-label="매출 조회 기간" defaultValue="7days">
-              <option value="7days">최근 7일</option>
-              <option value="30days">최근 30일</option>
-              <option value="90days">최근 3개월</option>
+            <select
+              aria-label="매출 조회 기간"
+              value={periodDays}
+              onChange={handlePeriodChange}
+            >
+              <option value={7}>최근 7일</option>
+              <option value={30}>최근 30일</option>
+              <option value={90}>최근 3개월</option>
             </select>
           </div>
 
           <div className="sales-total">
             <span>총 상품 판매액</span>
-            <strong>—원</strong>
+            <strong>
+              {isLoading
+                ? '—원'
+                : formatCurrency(dashboard?.sales?.sales_amount)}
+            </strong>
           </div>
 
           <div className="chart-placeholder">
-            <strong>기간별 매출 추이</strong>
-            <span>매출 데이터 연결 후 차트가 표시됩니다.</span>
+            <strong>최근 {periodDays}일 매출</strong>
+            <span>선택한 기간의 총 상품 판매액입니다.</span>
           </div>
 
           <div className="panel-subheading">
-            <strong>주요 상품 매출</strong>
+            <strong>상품별 매출</strong>
 
-            <button className="text-button" type="button">
+            <button
+              className="text-button"
+              type="button"
+              onClick={() => navigate('/sales')}
+            >
               자세히 보기
             </button>
           </div>
 
           <div className="empty-state compact">
-            <strong>표시할 상품 매출이 없습니다.</strong>
-            <span>판매액이 높은 상품이 이곳에 표시됩니다.</span>
+            <strong>상품별 매출 내역</strong>
+            <span>매출 메뉴에서 상품별 판매 실적을 확인할 수 있습니다.</span>
           </div>
         </section>
 
@@ -140,29 +266,43 @@ function DashboardPage() {
               <p>안전재고 이하로 내려간 상품입니다.</p>
             </div>
 
-            <span className="count-badge">—건</span>
+            <span className="count-badge">
+              {isLoading
+                ? '—건'
+                : `${formatNumber(dashboard?.lowStock?.low_stock_count)}건`}
+            </span>
           </div>
 
           <div className="dashboard-table-wrapper">
             <table className="dashboard-table">
               <thead>
                 <tr>
-                  <th>상품명/SKU</th>
-                  <th>현재재고</th>
-                  <th>안전재고</th>
+                  <th>구분</th>
+                  <th>현재 상태</th>
                 </tr>
               </thead>
 
               <tbody>
                 <tr>
-                  <td colSpan="3">표시할 재고 부족 상품이 없습니다.</td>
+                  <td>안전재고 이하 상품</td>
+                  <td>
+                    {isLoading
+                      ? '불러오는 중'
+                      : `${formatNumber(
+                          dashboard?.lowStock?.low_stock_count,
+                        )}건`}
+                  </td>
                 </tr>
               </tbody>
             </table>
           </div>
 
           <div className="panel-footer">
-            <button className="text-button" type="button">
+            <button
+              className="text-button"
+              type="button"
+              onClick={() => navigate('/inventory')}
+            >
               재고 관리 바로가기
             </button>
           </div>
@@ -176,31 +316,53 @@ function DashboardPage() {
               <p>처리를 기다리는 환불 요청입니다.</p>
             </div>
 
-            <span className="count-badge">—건</span>
+            <span className="count-badge">
+              {isLoading
+                ? '—건'
+                : `${formatNumber(
+                    dashboard?.refunds?.pending_refund_count,
+                  )}건`}
+            </span>
           </div>
 
           <div className="dashboard-table-wrapper">
             <table className="dashboard-table">
               <thead>
                 <tr>
-                  <th>상품/수량</th>
-                  <th>요청금액</th>
-                  <th>요청일</th>
-                  <th>상태</th>
-                  <th>상세</th>
+                  <th>구분</th>
+                  <th>요청 건수</th>
+                  <th>요청 금액</th>
                 </tr>
               </thead>
 
               <tbody>
                 <tr>
-                  <td colSpan="5">표시할 환불 요청이 없습니다.</td>
+                  <td>처리 대기 환불</td>
+                  <td>
+                    {isLoading
+                      ? '—'
+                      : `${formatNumber(
+                          dashboard?.refunds?.pending_refund_count,
+                        )}건`}
+                  </td>
+                  <td>
+                    {isLoading
+                      ? '—원'
+                      : formatCurrency(
+                          dashboard?.refunds?.pending_refund_amount,
+                        )}
+                  </td>
                 </tr>
               </tbody>
             </table>
           </div>
 
           <div className="panel-footer">
-            <button className="text-button" type="button">
+            <button
+              className="text-button"
+              type="button"
+              onClick={() => navigate('/refunds')}
+            >
               환불 요청 전체 보기
             </button>
           </div>
