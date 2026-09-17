@@ -1,5 +1,6 @@
-import { NavLink, Outlet } from 'react-router-dom'
+import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 
+import { removeAccessToken } from '../services/authStorage'
 import './SellerLayout.css'
 
 // 각 메뉴에 실제 브라우저 주소를 연결합니다.
@@ -14,6 +15,15 @@ const menuItems = [
 ]
 
 function SellerLayout() {
+  // 코드에서 다른 페이지로 이동할 때 사용하는 함수입니다.
+  const navigate = useNavigate()
+
+  // 저장된 로그인 토큰을 삭제하고 로그인 화면으로 이동합니다.
+  function handleLogout() {
+    removeAccessToken()
+    navigate('/login', { replace: true })
+  }
+
   return (
     <div className="seller-layout">
       <aside className="seller-sidebar">
@@ -48,8 +58,13 @@ function SellerLayout() {
             <span>판매자 전용</span>
           </div>
 
-          <button className="seller-account-button" type="button">
-            판매자 계정
+          {/* 클릭하면 로그인 정보를 지우고 로그인 화면으로 이동합니다. */}
+          <button
+            className="seller-account-button"
+            type="button"
+            onClick={handleLogout}
+          >
+            로그아웃
           </button>
         </header>
 
