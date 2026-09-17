@@ -54,13 +54,17 @@ def get_scoped_org_ids(db: Session, auth: AuthContext) -> list[int] | None:
 
 
 def list_refund_policies(db: Session, auth: AuthContext) -> list[RefundPolicy]:
+    """환불 정책 목록 조회: 최고관리자는 전체, 지점장은 본사 공통(org_id IS NULL 또는 1) 및 자기 조직 정책 조회."""
     query = db.query(RefundPolicy)
-    scoped = get_scoped_org_ids(db, auth)
-    if scoped is not None:
+    scoped_org_ids = get_scoped_org_ids(db, auth)
+    
+    if scoped_org_ids is not None:
+        # 본사(org_id=1 또는 NULL)와 지점장 소속 조직 ID를 모두 포함
+        allowed_orgs = set(scoped_org_ids) | {1, None}
         query = query.filter(
-            (RefundPolicy.org_id.is_(None)) | (RefundPolicy.org_id.in_(scoped or [-1]))
+            (RefundPolicy.org_id.in_(allowed_orgs)) | (RefundPolicy.org_id.is_(None))
         )
-    return list(query.order_by(RefundPolicy.effective_from.desc()).all())
+    return query.order_by(RefundPolicy.refund_policy_id.desc()).all()
 
 
 def get_refund_policy(db: Session, refund_policy_id: int, auth: AuthContext) -> RefundPolicy:

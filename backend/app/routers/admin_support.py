@@ -23,8 +23,8 @@ from app.services.admin_support import (
     get_inquiry_list,
     get_policy_by_id,
     get_policy_list,
+    is_super_admin,
 )
-
 
 router = APIRouter(
     prefix="/admin/support",
@@ -32,49 +32,30 @@ router = APIRouter(
 )
 
 
-# =========================================================
-# 문의 관리
-# =========================================================
-
-
 @router.get(
     "/inquiries",
     response_model=InquiryListResponse,
 )
 def list_inquiries(
-    skip: int = Query(
-        default=0,
-        ge=0,
-    ),
-    limit: int = Query(
-        default=100,
-        ge=1,
-        le=500,
-    ),
-    inquiry_status: str | None = Query(
-        default=None,
-    ),
-    category_code: str | None = Query(
-        default=None,
-    ),
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=1000, ge=1, le=1000),
+    inquiry_status: str | None = Query(default=None),
+    category_code: str | None = Query(default=None),
+    org_id: int | None = Query(default=None),
     db: Session = Depends(get_db),
     auth: AuthContext = Depends(require_admin),
 ) -> InquiryListResponse:
-    """관리자 문의 목록 조회."""
-
+    target_org_id = None if is_super_admin(db, auth) else (org_id or auth.org_id)
     total, items = get_inquiry_list(
         db,
+        auth=auth,
         skip=skip,
         limit=limit,
         inquiry_status=inquiry_status,
         category_code=category_code,
-        org_id=auth.org_id,
+        org_id=target_org_id,
     )
-
-    return InquiryListResponse(
-        total=total,
-        items=items,
-    )
+    return InquiryListResponse(total=total, items=items)
 
 
 @router.get(
@@ -86,29 +67,9 @@ def get_inquiry(
     db: Session = Depends(get_db),
     auth: AuthContext = Depends(require_admin),
 ) -> InquiryResponse:
-    """문의 상세 조회."""
-
-    inquiry = get_inquiry_by_id(
-        db,
-        inquiry_id,
-    )
-
+    inquiry = get_inquiry_by_id(db, inquiry_id, auth=auth)
     if inquiry is None:
-        raise HTTPException(
-            status_code=404,
-            detail="문의를 찾을 수 없습니다.",
-        )
-
-    if (
-        auth.org_id is not None
-        and inquiry.org_id is not None
-        and inquiry.org_id != auth.org_id
-    ):
-        raise HTTPException(
-            status_code=403,
-            detail="해당 문의에 접근할 권한이 없습니다.",
-        )
-
+        raise HTTPException(status_code=404, detail="문의를 찾을 수 없습니다.")
     return inquiry
 
 
@@ -122,41 +83,19 @@ def create_inquiry_answer(
     db: Session = Depends(get_db),
     auth: AuthContext = Depends(require_admin),
 ) -> InquiryAnswerResponse:
-    """관리자가 문의에 답변."""
-
-    existing = get_inquiry_by_id(
-        db,
-        inquiry_id,
-    )
-
+    existing = get_inquiry_by_id(db, inquiry_id, auth=auth)
     if existing is None:
-        raise HTTPException(
-            status_code=404,
-            detail="문의를 찾을 수 없습니다.",
-        )
-
-    if (
-        auth.org_id is not None
-        and existing.org_id is not None
-        and existing.org_id != auth.org_id
-    ):
-        raise HTTPException(
-            status_code=403,
-            detail="해당 문의에 접근할 권한이 없습니다.",
-        )
+        raise HTTPException(status_code=404, detail="문의를 찾을 수 없습니다.")
 
     inquiry = answer_inquiry(
         db,
+        auth=auth,
         inquiry_id=inquiry_id,
         answer_content=request.answer_content,
         answered_by_user_id=auth.user_id,
     )
-
     if inquiry is None:
-        raise HTTPException(
-            status_code=404,
-            detail="문의를 찾을 수 없습니다.",
-        )
+        raise HTTPException(status_code=404, detail="문의를 찾을 수 없습니다.")
 
     return InquiryAnswerResponse(
         message="문의 답변이 등록되었습니다.",
@@ -164,39 +103,19 @@ def create_inquiry_answer(
     )
 
 
-# =========================================================
-# 회사 정책 관리
-# =========================================================
-
-
 @router.get(
     "/policies",
     response_model=PolicyListResponse,
 )
 def list_policies(
-    skip: int = Query(
-        default=0,
-        ge=0,
-    ),
-    limit: int = Query(
-        default=100,
-        ge=1,
-        le=500,
-    ),
-    policy_code: str | None = Query(
-        default=None,
-    ),
-    policy_type: str | None = Query(
-        default=None,
-    ),
-    active_yn: str | None = Query(
-        default=None,
-    ),
+    skip: int = Query(default=0, ge=0),
+    limit: int = Query(default=100, ge=1, le=500),
+    policy_code: str | None = Query(default=None),
+    policy_type: str | None = Query(default=None),
+    active_yn: str | None = Query(default=None),
     db: Session = Depends(get_db),
     auth: AuthContext = Depends(require_admin),
 ) -> PolicyListResponse:
-    """회사 정책 및 버전 목록 조회."""
-
     total, items = get_policy_list(
         db,
         skip=skip,
@@ -206,11 +125,7 @@ def list_policies(
         active_yn=active_yn,
         org_id=auth.org_id,
     )
-
-    return PolicyListResponse(
-        total=total,
-        items=items,
-    )
+    return PolicyListResponse(total=total, items=items)
 
 
 @router.get(
@@ -222,28 +137,17 @@ def get_policy(
     db: Session = Depends(get_db),
     auth: AuthContext = Depends(require_admin),
 ) -> PolicyResponse:
-    """정책 상세 조회."""
-
-    policy = get_policy_by_id(
-        db,
-        policy_id,
-    )
-
+    policy = get_policy_by_id(db, policy_id)
     if policy is None:
-        raise HTTPException(
-            status_code=404,
-            detail="정책을 찾을 수 없습니다.",
-        )
+        raise HTTPException(status_code=404, detail="정책을 찾을 수 없습니다.")
 
     if (
         auth.org_id is not None
         and policy.org_id is not None
         and policy.org_id != auth.org_id
+        and not is_super_admin(db, auth)
     ):
-        raise HTTPException(
-            status_code=403,
-            detail="해당 정책에 접근할 권한이 없습니다.",
-        )
+        raise HTTPException(status_code=403, detail="해당 정책에 접근할 권한이 없습니다.")
 
     return policy
 
@@ -258,21 +162,10 @@ def create_new_policy(
     db: Session = Depends(get_db),
     auth: AuthContext = Depends(require_admin),
 ) -> PolicyResponse:
-    """새 회사 정책 생성."""
-
     try:
-        policy = create_policy(
-            db,
-            request,
-            default_org_id=auth.org_id,
-        )
-
+        policy = create_policy(db, request, auth=auth, default_org_id=auth.org_id)
     except ValueError as exc:
-        raise HTTPException(
-            status_code=400,
-            detail=str(exc),
-        ) from exc
-
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
     return policy
 
 
@@ -287,50 +180,33 @@ def create_new_policy_version(
     db: Session = Depends(get_db),
     auth: AuthContext = Depends(require_admin),
 ) -> PolicyResponse:
-    """기존 정책을 기준으로 새 버전 생성."""
-
-    source_policy = get_policy_by_id(
-        db,
-        policy_id,
-    )
-
+    source_policy = get_policy_by_id(db, policy_id)
     if source_policy is None:
-        raise HTTPException(
-            status_code=404,
-            detail="기준 정책을 찾을 수 없습니다.",
-        )
+        raise HTTPException(status_code=404, detail="기준 정책을 찾을 수 없습니다.")
 
     if (
         auth.org_id is not None
         and source_policy.org_id is not None
         and source_policy.org_id != auth.org_id
+        and not is_super_admin(db, auth)
     ):
-        raise HTTPException(
-            status_code=403,
-            detail="해당 정책에 접근할 권한이 없습니다.",
-        )
+        raise HTTPException(status_code=403, detail="해당 정책에 접근할 권한이 없습니다.")
 
     try:
         policy = create_policy_version(
             db,
+            auth=auth,
             source_policy_id=policy_id,
             policy_version=request.policy_version,
             effective_from=request.effective_from,
             effective_to=request.effective_to,
             policy_content=request.policy_content,
         )
-
     except ValueError as exc:
-        raise HTTPException(
-            status_code=400,
-            detail=str(exc),
-        ) from exc
+        raise HTTPException(status_code=400, detail=str(exc)) from exc
 
     if policy is None:
-        raise HTTPException(
-            status_code=404,
-            detail="기준 정책을 찾을 수 없습니다.",
-        )
+        raise HTTPException(status_code=404, detail="기준 정책을 찾을 수 없습니다.")
 
     return policy
 
@@ -344,39 +220,21 @@ def delete_policy(
     db: Session = Depends(get_db),
     auth: AuthContext = Depends(require_admin),
 ) -> PolicyDeactivateResponse:
-    """정책을 실제 삭제하지 않고 비활성화."""
-
-    existing = get_policy_by_id(
-        db,
-        policy_id,
-    )
-
+    existing = get_policy_by_id(db, policy_id)
     if existing is None:
-        raise HTTPException(
-            status_code=404,
-            detail="정책을 찾을 수 없습니다.",
-        )
+        raise HTTPException(status_code=404, detail="정책을 찾을 수 없습니다.")
 
     if (
         auth.org_id is not None
         and existing.org_id is not None
         and existing.org_id != auth.org_id
+        and not is_super_admin(db, auth)
     ):
-        raise HTTPException(
-            status_code=403,
-            detail="해당 정책에 접근할 권한이 없습니다.",
-        )
+        raise HTTPException(status_code=403, detail="해당 정책에 접근할 권한이 없습니다.")
 
-    policy = deactivate_policy(
-        db,
-        policy_id,
-    )
-
+    policy = deactivate_policy(db, policy_id, auth=auth)
     if policy is None:
-        raise HTTPException(
-            status_code=404,
-            detail="정책을 찾을 수 없습니다.",
-        )
+        raise HTTPException(status_code=404, detail="정책을 찾을 수 없습니다.")
 
     return PolicyDeactivateResponse(
         message="정책이 비활성화되었습니다.",
