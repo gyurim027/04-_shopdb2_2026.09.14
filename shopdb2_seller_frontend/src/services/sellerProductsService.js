@@ -12,7 +12,6 @@ export async function getSellerProducts({
     size: String(size),
   })
 
-  // 상태나 검색어가 있을 때만 주소에 추가합니다.
   if (productStatus) {
     query.set('product_status', productStatus)
   }
@@ -24,7 +23,23 @@ export async function getSellerProducts({
   return apiRequest(`/seller/products/products?${query.toString()}`)
 }
 
-// 상품 등록 화면과 검색 필터에서 사용할 카테고리를 불러옵니다.
+// 상품 등록 화면에서 사용할 카테고리를 불러옵니다.
 export async function getSellerCategories() {
   return apiRequest('/seller/products/categories')
+}
+
+// 새 상품을 등록합니다.
+export async function createSellerProduct(values) {
+  return apiRequest('/seller/products/products', {
+    method: 'POST',
+    body: JSON.stringify(values),
+  })
+}
+
+// 기존 상품의 기본 정보와 판매 상태를 수정합니다.
+export async function updateSellerProduct(productId, values) {
+  return apiRequest(`/seller/products/products/${productId}`, {
+    method: 'PATCH',
+    body: JSON.stringify(values),
+  })
 }
