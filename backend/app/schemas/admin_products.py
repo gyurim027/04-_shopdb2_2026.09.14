@@ -5,7 +5,6 @@ from decimal import Decimal
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 
-# DB enum(products.product_status) 그대로 사용
 PRODUCT_STATUSES = ("READY", "SALE", "SOLD_OUT", "STOPPED", "DELETED")
 
 
@@ -47,7 +46,7 @@ class ProductCreate(BaseModel):
     description: str | None = None
     regular_price: Decimal
     sale_price: Decimal
-    product_status: str = "READY"
+    product_status: str = Field("READY", description="READY, SALE, SOLD_OUT, STOPPED, DELETED")
 
 
 class ProductUpdate(BaseModel):
@@ -57,7 +56,7 @@ class ProductUpdate(BaseModel):
     description: str | None = None
     regular_price: Decimal | None = None
     sale_price: Decimal | None = None
-    product_status: str | None = None
+    product_status: str | None = Field(None, description="READY, SALE, SOLD_OUT, STOPPED, DELETED")
 
 
 class ProductOut(BaseModel):
@@ -120,12 +119,11 @@ class VariantOut(BaseModel):
 
 
 # --- Product images --------------------------------------------------------
-# DB enum(product_images.image_type): MAIN / DETAIL / THUMBNAIL / OPTION
 
 
 class ProductImageCreate(BaseModel):
     file_id: int
-    image_type: str = "DETAIL"
+    image_type: str = Field("DETAIL", description="MAIN / DETAIL / THUMBNAIL / OPTION")
     alt_text: str | None = Field(None, max_length=500)
     display_order: int = 0
 
@@ -151,7 +149,6 @@ class ProductImageOut(BaseModel):
 
 
 # --- Product files (첨부파일) ------------------------------------------------
-# 이 테이블엔 active_yn이 없어 삭제는 소프트 삭제가 아니라 실제 DELETE로 처리한다.
 
 
 class ProductFileCreate(BaseModel):

@@ -1,7 +1,7 @@
 """Service layer for admin_users (org_units, users)."""
 
 from fastapi import HTTPException, status
-from sqlalchemy import text  # text 함수 임포트
+from sqlalchemy import text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
@@ -109,7 +109,17 @@ def get_users(
     return query.order_by(User.user_id).offset(skip).limit(limit).all()
 
 def create_user(db: Session, user_in: UserCreate, auth: AuthContext) -> User:
-    require_super_admin(db, auth, "최고관리자만 회원을 등록할 수 있습니다.")
+    """
+    최고관리자는 모든 곳에, 지점장은 자신의 소속 지사 및 하위 조직 범위 내에만 회원을 등록할 수 있도록 방어벽 적용
+    """
+    scoped = get_scoped_org_ids(db, auth)
+    if scoped is not None:
+        if user_in.org_id is None or user_in.org_id not in scoped:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="소속된 지사 및 하위 조직 범위 내에만 회원을 등록할 수 있습니다."
+            )
+            
     user = User(
         login_id=user_in.login_id,
         password_hash=get_password_hash(user_in.password),

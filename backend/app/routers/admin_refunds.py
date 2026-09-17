@@ -18,9 +18,6 @@ from app.services import admin_refunds as service
 router = APIRouter(prefix="/admin/refunds", tags=["Admin Refunds"])
 
 
-# --- Refund policies -------------------------------------------------------
-
-
 @router.get("/policies", response_model=list[RefundPolicyOut])
 def list_refund_policies(
     db: Session = Depends(get_db),
@@ -66,10 +63,6 @@ def deactivate_refund_policy(
     auth: AuthContext = Depends(require_admin),
 ) -> None:
     service.deactivate_refund_policy(db, refund_policy_id, auth)
-
-
-# --- Refund requests ---------------------------------------------------
-# 신청(생성)은 대고객 화면 몫이라 여기엔 POST(신규 생성) 엔드포인트가 없다.
 
 
 @router.get("/requests", response_model=list[RefundRequestOut])
