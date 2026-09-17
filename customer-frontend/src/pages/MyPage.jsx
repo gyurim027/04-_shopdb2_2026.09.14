@@ -31,7 +31,7 @@ export default function MyPage() {
       customerApi.getProfile(),
       customerApi.getOrders({ size: 1 }),
       customerApi.getRefunds({ size: 1 }),
-      customerApi.getInquiries({ size: 1 }),
+      customerApi.getInquiries({ size: 100 }),
     ])
 
     const [profileResult, orderResult, refundResult, inquiryResult] = results
@@ -47,7 +47,11 @@ export default function MyPage() {
     setStats({
       orders: orderResult.status === 'fulfilled' ? Number(orderResult.value?.total || 0) : 0,
       refunds: refundResult.status === 'fulfilled' ? Number(refundResult.value?.total || 0) : 0,
-      inquiries: inquiryResult.status === 'fulfilled' ? Number(inquiryResult.value?.total || 0) : 0,
+      inquiries: inquiryResult.status === 'fulfilled'
+        ? (Array.isArray(inquiryResult.value)
+          ? inquiryResult.value.length
+          : Number(inquiryResult.value?.total ?? inquiryResult.value?.items?.length ?? 0))
+        : 0,
     })
     setLoading(false)
   }

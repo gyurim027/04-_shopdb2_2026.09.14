@@ -10,6 +10,7 @@ import MyPage from './pages/MyPage'
 import AddressesPage from './pages/AddressesPage'
 import OrdersPage from './pages/OrdersPage'
 import OrderDetailPage from './pages/OrderDetailPage'
+import DeliveryTrackingPage from './pages/DeliveryTrackingPage'
 import RefundsPage from './pages/RefundsPage'
 import SupportPage from './pages/SupportPage'
 import InquiryDetailPage from './pages/InquiryDetailPage'
@@ -32,6 +33,7 @@ export default function App() {
         <Route path="addresses" element={<P><AddressesPage /></P>} />
         <Route path="orders" element={<P><OrdersPage /></P>} />
         <Route path="orders/:orderId" element={<P><OrderDetailPage /></P>} />
+        <Route path="orders/:orderId/tracking" element={<P><DeliveryTrackingPage /></P>} />
         <Route path="refunds" element={<P><RefundsPage /></P>} />
         <Route path="support" element={<P><SupportPage /></P>} />
         <Route path="support/:inquiryId" element={<P><InquiryDetailPage /></P>} />
