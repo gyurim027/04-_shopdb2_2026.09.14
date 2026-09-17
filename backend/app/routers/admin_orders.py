@@ -14,7 +14,7 @@ router = APIRouter(
     tags=["Admin Orders & Payments"]
 )
 
-# 1. 주문 전체 조회/관리 API
+# 1. 주문 전체 조회/관리 API (최고관리자: 전체, 지점장: 소속 지사만 필터링)
 @router.get("", response_model=List[OrderResponse])
 def read_orders(
     skip: int = Query(0, description="건너뛸 데이터 수"),
@@ -25,7 +25,7 @@ def read_orders(
 ):
     return order_service.get_orders(db=db, auth=auth, skip=skip, limit=limit, status_filter=status)
 
-# 2. 주문 상태 변경 API
+# 2. 주문 상태 변경 API (최고관리자 및 소속 지점장 권한 검증 포함)
 @router.patch("/{order_id}/status", response_model=OrderResponse)
 def change_order_status(
     order_id: int,

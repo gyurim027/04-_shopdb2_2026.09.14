@@ -24,7 +24,7 @@ def get_orders(
     if status_filter:
         query = query.filter(Order.order_status == status_filter)
         
-    return query.order_by(Order.created_at.desc()).offset(skip).limit(limit).all()
+    return query.order_by(Order.updated_at.desc()).offset(skip).limit(limit).all()
 
 
 # 2. 특정 주문 상태 변경

@@ -1,4 +1,4 @@
-"""Pydantic schemas for admin_orders (orders, payments/settlements)."""
+"""Pydantic schemas for admin_orders (orders, payments/settlements, dashboard)."""
 
 from datetime import datetime
 from typing import Optional
@@ -51,3 +51,13 @@ class SettlementResponse(BaseModel):
     approved_at: Optional[datetime] = None
     cancelled_at: Optional[datetime] = None
     created_at: datetime
+
+# 대시보드 요약 지표 응답 스키마
+class DashboardSummaryOut(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+    
+    total_orders_count: int
+    pending_orders_count: int
+    total_sales_amount: Decimal
+    low_stock_count: int
+    unanswered_inquiries_count: int

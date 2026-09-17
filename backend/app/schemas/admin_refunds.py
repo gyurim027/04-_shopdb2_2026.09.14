@@ -9,9 +9,6 @@ REFUND_STATUSES = ("REQUESTED", "REVIEWING", "APPROVED", "REJECTED", "COMPLETED"
 SHIPPING_FEE_PAYERS = ("BUYER", "SELLER", "COMPANY")
 
 
-# --- Refund policies ---------------------------------------------------
-
-
 class RefundPolicyCreate(BaseModel):
     org_id: int | None = None
     policy_name: str = Field(..., max_length=200)
@@ -55,11 +52,6 @@ class RefundPolicyOut(BaseModel):
     active_yn: str
 
 
-# --- Refund requests -----------------------------------------------------
-# 생성(신청)은 대고객 화면에서 발생하므로 여기엔 Create 스키마가 없다.
-# 어드민은 조회 + 승인/거절 처리만 한다.
-
-
 class RefundRequestOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -77,11 +69,7 @@ class RefundRequestOut(BaseModel):
 
 
 class RefundApprove(BaseModel):
-    approved_amount: Decimal | None = None  # 생략 시 requested_amount 그대로 승인
-
-
-# --- Refund items ----------------------------------------------------------
-# refund_requests 신청 시 함께 생성되므로 어드민은 조회만 한다.
+    approved_amount: Decimal | None = None
 
 
 class RefundItemOut(BaseModel):

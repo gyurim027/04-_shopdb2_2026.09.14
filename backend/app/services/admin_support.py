@@ -1,11 +1,47 @@
 from datetime import date, datetime
 
-from sqlalchemy import func, select
+from fastapi import HTTPException, status
+from sqlalchemy import func, select, text
 from sqlalchemy.exc import IntegrityError
 from sqlalchemy.orm import Session
 
+from app.dependencies.auth import AuthContext
 from app.models.support import BuyerInquiry, CompanyPolicy
+from app.models.users import OrgUnit
 from app.schemas.admin_support import PolicyCreateRequest
+
+
+def get_org_type(db: Session, org_id: int | None) -> str | None:
+    if org_id is None:
+        return None
+    row = db.execute(
+        text("SELECT org_type FROM org_units WHERE org_id = :org_id"),
+        {"org_id": org_id},
+    ).first()
+    return row[0] if row else None
+
+
+def is_super_admin(db: Session, auth: AuthContext | None) -> bool:
+    if auth is None or auth.org_id is None:
+        return True
+    if auth.org_id == 1:
+        return True
+    org = db.get(OrgUnit, auth.org_id)
+    return org is not None and (org.org_type == "HEADQUARTER" or org.org_id == 1)
+
+
+def get_scoped_org_ids(db: Session, auth: AuthContext | None) -> list[int] | None:
+    """None이면 전체 접근(최고관리자). 아니면 접근 가능한 org_id 목록(자기 조직 + 하위 조직)."""
+    if auth is None or is_super_admin(db, auth):
+        return None
+    if auth.org_id is None:
+        return []
+    rows = (
+        db.query(OrgUnit.org_id)
+        .filter((OrgUnit.org_id == auth.org_id) | (OrgUnit.parent_org_id == auth.org_id))
+        .all()
+    )
+    return [row[0] for row in rows]
 
 
 # =========================================================
@@ -16,22 +52,34 @@ from app.schemas.admin_support import PolicyCreateRequest
 def get_inquiry_by_id(
     db: Session,
     inquiry_id: int,
+    auth: AuthContext | None = None,
 ) -> BuyerInquiry | None:
-    """문의 1개 조회."""
-
-    return db.get(BuyerInquiry, inquiry_id)
+    """문의 1개 조회 (조직 스코프 검증 포함)."""
+    inquiry = db.get(BuyerInquiry, inquiry_id)
+    if inquiry is None:
+        return None
+        
+    scoped = get_scoped_org_ids(db, auth)
+    if scoped is not None:
+        if inquiry.org_id not in scoped:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="해당 문의를 조회할 권한이 없습니다."
+            )
+    return inquiry
 
 
 def get_inquiry_list(
     db: Session,
+    auth: AuthContext | None = None,
     *,
     skip: int = 0,
-    limit: int = 100,
+    limit: int = 1000,
     inquiry_status: str | None = None,
     category_code: str | None = None,
     org_id: int | None = None,
 ) -> tuple[int, list[BuyerInquiry]]:
-    """관리자 문의 목록 조회."""
+    """관리자 문의 목록 조회 (조직 스코프 강제 적용)."""
 
     conditions = []
 
@@ -45,10 +93,20 @@ def get_inquiry_list(
             BuyerInquiry.category_code == category_code
         )
 
-    if org_id is not None:
-        conditions.append(
-            BuyerInquiry.org_id == org_id
-        )
+    scoped = get_scoped_org_ids(db, auth)
+    if scoped is not None:
+        if org_id is not None:
+            if org_id not in scoped:
+                raise HTTPException(
+                    status_code=status.HTTP_403_FORBIDDEN,
+                    detail="해당 조직의 문의를 조회할 권한이 없습니다."
+                )
+            conditions.append(BuyerInquiry.org_id == org_id)
+        else:
+            conditions.append(BuyerInquiry.org_id.in_(scoped or [-1]))
+    else:
+        if org_id is not None:
+            conditions.append(BuyerInquiry.org_id == org_id)
 
     count_query = select(
         func.count(BuyerInquiry.inquiry_id)
@@ -78,12 +136,13 @@ def get_inquiry_list(
 
 def answer_inquiry(
     db: Session,
+    auth: AuthContext | None = None,
     *,
     inquiry_id: int,
     answer_content: str,
     answered_by_user_id: int,
 ) -> BuyerInquiry | None:
-    """관리자가 문의에 답변."""
+    """관리자가 문의에 답변 (조직 스코프 검증 포함)."""
 
     inquiry = db.get(
         BuyerInquiry,
@@ -92,6 +151,13 @@ def answer_inquiry(
 
     if inquiry is None:
         return None
+
+    scoped = get_scoped_org_ids(db, auth)
+    if scoped is not None and inquiry.org_id not in scoped:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="해당 문의에 답변할 권한이 없습니다."
+        )
 
     now = datetime.now()
 
@@ -123,10 +189,8 @@ def get_policy_by_id(
         policy_id,
     )
 
-
 def get_policy_list(
     db: Session,
-    *,
     skip: int = 0,
     limit: int = 100,
     policy_code: str | None = None,
@@ -134,67 +198,47 @@ def get_policy_list(
     active_yn: str | None = None,
     org_id: int | None = None,
 ) -> tuple[int, list[CompanyPolicy]]:
-    """정책 및 정책 버전 목록 조회."""
+    """회사 정책 목록 조회: 본사 공통 및 지점 소속 정책 모두 조회 가능하도록 수정."""
+    query = db.query(CompanyPolicy)
 
-    conditions = []
+    # 지점장인 경우 본사(org_id=1 또는 NULL) 및 본인 조직 정책 허용
+    if org_id is not None and org_id != 1:
+        query = query.filter(
+            (CompanyPolicy.org_id == org_id) | 
+            (CompanyPolicy.org_id == 1) | 
+            (CompanyPolicy.org_id.is_(None))
+        )
 
     if policy_code:
-        conditions.append(
-            CompanyPolicy.policy_code == policy_code
-        )
-
+        query = query.filter(CompanyPolicy.policy_code == policy_code)
     if policy_type:
-        conditions.append(
-            CompanyPolicy.policy_type == policy_type
-        )
-
+        query = query.filter(CompanyPolicy.policy_type == policy_type)
     if active_yn:
-        conditions.append(
-            CompanyPolicy.active_yn == active_yn
-        )
+        query = query.filter(CompanyPolicy.active_yn == active_yn)
 
-    if org_id is not None:
-        conditions.append(
-            CompanyPolicy.org_id == org_id
-        )
-
-    count_query = select(
-        func.count(CompanyPolicy.policy_id)
-    )
-
-    if conditions:
-        count_query = count_query.where(*conditions)
-
-    total = db.scalar(count_query) or 0
-
-    query = (
-        select(CompanyPolicy)
-        .order_by(
-            CompanyPolicy.policy_code.asc(),
-            CompanyPolicy.effective_from.desc(),
-            CompanyPolicy.policy_id.desc(),
-        )
+    total = query.count()
+    items = (
+        query.order_by(CompanyPolicy.policy_id.desc())
         .offset(skip)
         .limit(limit)
+        .all()
     )
-
-    if conditions:
-        query = query.where(*conditions)
-
-    items = list(
-        db.scalars(query).all()
-    )
-
     return total, items
 
 
 def create_policy(
     db: Session,
     request: PolicyCreateRequest,
+    auth: AuthContext | None = None,
     *,
     default_org_id: int | None = None,
 ) -> CompanyPolicy:
-    """새 회사 정책 생성."""
+    """새 회사 정책 생성 (최고관리자 전용 권한 체크 추가)."""
+    if auth is not None and not is_super_admin(db, auth):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="최고관리자만 정책을 생성할 수 있습니다."
+        )
 
     if (
         request.effective_to is not None
@@ -239,6 +283,7 @@ def create_policy(
 
 def create_policy_version(
     db: Session,
+    auth: AuthContext | None = None,
     *,
     source_policy_id: int,
     policy_version: str,
@@ -246,7 +291,12 @@ def create_policy_version(
     effective_to: date | None = None,
     policy_content: str | None = None,
 ) -> CompanyPolicy | None:
-    """기존 정책을 기준으로 새로운 버전을 생성."""
+    """기존 정책을 기준으로 새로운 버전을 생성 (최고관리자 전용)."""
+    if auth is not None and not is_super_admin(db, auth):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="최고관리자만 정책 버전을 생성할 수 있습니다."
+        )
 
     source = db.get(
         CompanyPolicy,
@@ -298,8 +348,14 @@ def create_policy_version(
 def deactivate_policy(
     db: Session,
     policy_id: int,
+    auth: AuthContext | None = None,
 ) -> CompanyPolicy | None:
-    """정책을 삭제하지 않고 비활성화."""
+    """정책을 삭제하지 않고 비활성화 (최고관리자 전용)."""
+    if auth is not None and not is_super_admin(db, auth):
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="최고관리자만 정책을 비활성화할 수 있습니다."
+        )
 
     policy = db.get(
         CompanyPolicy,
