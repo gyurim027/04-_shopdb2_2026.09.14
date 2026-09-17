@@ -1,0 +1,135 @@
+/* 사이드바와 본문을 좌우로 배치하는 전체 화면 틀입니다. */
+.seller-layout {
+  display: grid;
+  grid-template-columns: 240px minmax(0, 1fr);
+  min-height: 100vh;
+  background-color: var(--color-canvas);
+}
+
+/* 왼쪽 고정 메뉴 영역입니다. */
+.seller-sidebar {
+  padding: var(--space-lg) var(--space-md);
+  background-color: var(--color-surface);
+  border-right: 1px solid var(--color-hairline);
+}
+
+.seller-logo {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  padding: 0 var(--space-xs) var(--space-lg);
+}
+
+.seller-logo-mark {
+  display: grid;
+  width: 36px;
+  height: 36px;
+  place-items: center;
+  color: #ffffff;
+  font-weight: 700;
+  background-color: var(--color-primary);
+  border-radius: var(--radius-md);
+}
+
+.seller-logo div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.seller-logo strong {
+  font-size: var(--font-size-body-md);
+}
+
+.seller-logo div span {
+  color: var(--color-ink-faint);
+  font-size: 12px;
+}
+
+.seller-navigation {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xxs);
+}
+
+/* 메뉴는 아직 이동 기능이 없는 정적인 버튼입니다. */
+.seller-menu-item {
+  display: block;
+  width: 100%;
+  padding: 11px var(--space-sm);
+  color: var(--color-ink-muted);
+  text-align: left;
+  text-decoration: none;
+  background: none;
+  border: 0;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.seller-menu-item:hover {
+  color: var(--color-ink);
+  background-color: var(--color-canvas);
+}
+
+/* 현재 선택된 메뉴를 파란색으로 표시합니다. */
+.seller-menu-item.is-active {
+  color: var(--color-primary);
+  font-weight: 600;
+  background-color: rgb(0 117 222 / 8%);
+}
+
+.seller-main {
+  min-width: 0;
+}
+
+/* 오른쪽 상단의 공통 헤더입니다. */
+.seller-header {
+  display: flex;
+  min-height: 64px;
+  align-items: center;
+  justify-content: space-between;
+  padding: 0 var(--space-xxl);
+  background-color: var(--color-surface);
+  border-bottom: 1px solid var(--color-hairline);
+}
+
+.seller-header > div {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+}
+
+.seller-header strong {
+  font-size: var(--font-size-body-md);
+}
+
+.seller-header span {
+  color: var(--color-ink-faint);
+  font-size: var(--font-size-caption);
+}
+
+.seller-account-button {
+  padding: 8px 14px;
+  color: var(--color-ink-secondary);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.seller-content {
+  padding: var(--space-xxl);
+}
+
+/* 화면이 좁아지면 사이드바 너비와 본문 여백을 줄입니다. */
+@media (max-width: 900px) {
+  .seller-layout {
+    grid-template-columns: 200px minmax(0, 1fr);
+  }
+
+  .seller-content,
+  .seller-header {
+    padding-right: var(--space-lg);
+    padding-left: var(--space-lg);
+  }
+}

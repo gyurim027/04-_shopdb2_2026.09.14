@@ -1,0 +1,155 @@
+/* 로그인 화면을 브라우저 중앙에 배치합니다. */
+.login-page {
+  display: grid;
+  min-height: 100vh;
+  padding: var(--space-lg);
+  place-items: center;
+  background-color: var(--color-canvas);
+}
+
+/* 로그인 입력 영역을 담는 흰색 카드입니다. */
+.login-card {
+  width: 100%;
+  max-width: 420px;
+  padding: var(--space-xxl);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-xl);
+  box-shadow: var(--shadow-soft);
+}
+
+.login-brand {
+  display: flex;
+  align-items: center;
+  gap: var(--space-sm);
+  margin-bottom: 40px;
+}
+
+.login-logo {
+  display: grid;
+  width: 40px;
+  height: 40px;
+  place-items: center;
+  color: #ffffff;
+  font-weight: 700;
+  background-color: var(--color-primary);
+  border-radius: var(--radius-md);
+}
+
+.login-brand > div {
+  display: flex;
+  flex-direction: column;
+  gap: 2px;
+}
+
+.login-brand strong {
+  font-size: var(--font-size-body-md);
+}
+
+.login-brand div span {
+  color: var(--color-ink-faint);
+  font-size: 12px;
+}
+
+.login-heading {
+  margin-bottom: var(--space-xl);
+}
+
+.login-heading h1 {
+  margin: 0 0 var(--space-xs);
+  font-size: var(--font-size-heading-2);
+  letter-spacing: -0.625px;
+}
+
+.login-heading p {
+  margin: 0;
+  color: var(--color-ink-muted);
+  font-size: var(--font-size-body-sm);
+}
+
+.login-form {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-md);
+}
+
+.login-field {
+  display: flex;
+  flex-direction: column;
+  gap: var(--space-xs);
+}
+
+.login-field label {
+  color: var(--color-ink-secondary);
+  font-size: var(--font-size-caption);
+  font-weight: 600;
+}
+
+.login-field input {
+  width: 100%;
+  min-height: 44px;
+  padding: 0 var(--space-sm);
+  color: var(--color-ink);
+  background-color: var(--color-surface);
+  border: 1px solid var(--color-hairline);
+  border-radius: var(--radius-md);
+  outline: none;
+}
+
+.login-field input::placeholder {
+  color: var(--color-ink-faint);
+}
+
+.login-field input:focus {
+  border-color: var(--color-primary);
+  box-shadow: 0 0 0 3px rgb(0 117 222 / 10%);
+}
+
+.login-submit-button {
+  min-height: 44px;
+  margin-top: var(--space-xs);
+  color: #ffffff;
+  font-weight: 600;
+  background-color: var(--color-primary);
+  border: 0;
+  border-radius: var(--radius-md);
+  cursor: pointer;
+}
+
+.login-submit-button:hover {
+  background-color: var(--color-primary-active);
+}
+
+.login-help {
+  margin: var(--space-lg) 0 0;
+  color: var(--color-ink-faint);
+  font-size: var(--font-size-caption);
+  text-align: center;
+}
+
+@media (max-width: 480px) {
+  .login-page {
+    padding: var(--space-md);
+  }
+
+  .login-card {
+    padding: var(--space-lg);
+  }
+}
+
+/* 로그인 실패 메시지입니다. */
+.login-error {
+  margin: 0;
+  padding: var(--space-sm);
+  color: #b42318;
+  font-size: var(--font-size-caption);
+  background-color: #fef3f2;
+  border: 1px solid #fecdca;
+  border-radius: var(--radius-md);
+}
+
+/* 로그인 요청 중에는 버튼을 다시 누르지 못하게 표시합니다. */
+.login-submit-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
