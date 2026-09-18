@@ -14,6 +14,7 @@ from app.schemas.customer_products import (
     CustomerProductImageResponse,
     CustomerProductListItem,
     CustomerProductListResponse,
+    CustomerProductSellerResponse,
     CustomerProductVariantResponse,
 )
 
@@ -28,10 +29,7 @@ def get_customer_categories(
     db: Session,
 ) -> list[CustomerCategoryResponse]:
     """
-    고객 화면에 노출할 활성 카테고리 목록 조회.
-
-    기존 categories 테이블에서
-    active_yn='Y'인 카테고리만 보여준다.
+    고객 화면에 노출할 활성 카테고리 목록을 조회한다.
     """
 
     categories = (
@@ -62,14 +60,7 @@ def _get_main_image_url(
     product_id: int,
 ) -> str | None:
     """
-    상품 목록에 사용할 대표 이미지 URL 조회.
-
-    기존:
-    product_images
-        ↓
-    file_assets
-
-    두 테이블을 연결해서 활성 이미지/파일만 조회한다.
+    상품 목록에서 사용할 대표 이미지 URL을 조회한다.
 
     이미지 우선순위:
     1. MAIN
@@ -127,14 +118,11 @@ def get_customer_products(
     """
     고객 상품 목록 / 검색.
 
-    고객 화면에는:
+    고객 화면에서는:
     - SALE
     - SOLD_OUT
 
     상태의 상품만 노출한다.
-
-    READY / STOPPED / DELETED 상품은
-    고객에게 노출하지 않는다.
     """
 
     query = (
@@ -154,13 +142,11 @@ def get_customer_products(
         )
     )
 
-    # 카테고리 필터
     if category_id is not None:
         query = query.filter(
             Product.category_id == category_id
         )
 
-    # 상품 검색
     if keyword:
         cleaned_keyword = keyword.strip()
 
@@ -231,10 +217,7 @@ def _get_product_images(
     product_id: int,
 ) -> list[CustomerProductImageResponse]:
     """
-    상품 상세 페이지 이미지 목록 조회.
-
-    product_images와 file_assets를 연결해서
-    활성 이미지와 활성 파일만 반환한다.
+    상품 상세 페이지 이미지 목록을 조회한다.
     """
 
     rows = db.execute(
@@ -285,20 +268,14 @@ def _get_available_quantity_by_variant(
     variant_ids: list[int],
 ) -> dict[int, int]:
     """
-    각 SKU별 고객 구매 가능 수량 계산.
+    각 SKU별 전체 구매 가능 수량을 계산한다.
 
-    기존 inventories 테이블의:
-
-    stock_quantity
-    reserved_quantity
-
-    를 이용한다.
-
-    각 재고 행별:
+    구매 가능 재고:
     stock_quantity - reserved_quantity
 
-    값이 0보다 작으면 0으로 처리한 뒤
-    여러 조직의 재고를 합산한다.
+    기존 상품 상세 API와 호환성을 유지하기 위해
+    모든 조직의 구매 가능 재고를 합산한 값을
+    available_quantity로 반환한다.
     """
 
     if not variant_ids:
@@ -339,12 +316,119 @@ def _get_available_quantity_by_variant(
     return quantities
 
 
+def _get_variant_sellers(
+    db: Session,
+    variant_id: int,
+) -> list[CustomerProductSellerResponse]:
+    """
+    특정 상품 옵션을 판매하는 판매사 목록을 조회한다.
+
+    inventories의:
+    - org_id
+    - variant_id
+
+    관계를 이용해서 어떤 판매사가
+    해당 상품 옵션을 판매하는지 확인한다.
+
+    장바구니에서는 여기서 내려주는 org_id를
+    함께 전달해서 판매사를 구분한다.
+    """
+
+    rows = db.execute(
+        text(
+            """
+            SELECT
+                i.org_id,
+                ou.org_name,
+
+                (
+                    SELECT sp.company_name
+                    FROM seller_profiles AS sp
+
+                    INNER JOIN users AS seller_user
+                        ON seller_user.user_id = sp.user_id
+
+                    WHERE seller_user.org_id = i.org_id
+                      AND seller_user.user_status = 'ACTIVE'
+                      AND sp.seller_status = 'ACTIVE'
+
+                    ORDER BY sp.seller_id
+
+                    LIMIT 1
+                ) AS seller_name,
+
+                SUM(
+                    GREATEST(
+                        i.stock_quantity
+                        - i.reserved_quantity,
+                        0
+                    )
+                ) AS available_quantity
+
+            FROM inventories AS i
+
+            INNER JOIN org_units AS ou
+                ON ou.org_id = i.org_id
+
+            WHERE i.variant_id = :variant_id
+              AND ou.active_yn = 'Y'
+
+              AND EXISTS (
+                    SELECT 1
+
+                    FROM seller_profiles AS active_sp
+
+                    INNER JOIN users AS active_seller_user
+                        ON active_seller_user.user_id
+                           = active_sp.user_id
+
+                    WHERE active_seller_user.org_id
+                          = i.org_id
+                      AND active_seller_user.user_status
+                          = 'ACTIVE'
+                      AND active_sp.seller_status
+                          = 'ACTIVE'
+                )
+
+            GROUP BY
+                i.org_id,
+                ou.org_name
+
+            ORDER BY
+                i.org_id
+            """
+        ),
+        {
+            "variant_id": variant_id,
+        },
+    ).mappings().all()
+
+    return [
+        CustomerProductSellerResponse(
+            org_id=row["org_id"],
+            org_name=row["org_name"],
+            seller_name=row["seller_name"],
+            available_quantity=int(
+                row["available_quantity"]
+                or 0
+            ),
+        )
+        for row in rows
+    ]
+
+
 def _get_product_variants(
     db: Session,
     product_id: int,
 ) -> list[CustomerProductVariantResponse]:
     """
-    고객이 선택할 수 있는 활성 SKU 목록 조회.
+    고객이 선택할 수 있는 활성 SKU 목록을 조회한다.
+
+    각 SKU에는:
+    - 전체 구매 가능 재고
+    - 판매사별 구매 가능 재고
+
+    를 함께 반환한다.
     """
 
     variants = (
@@ -389,6 +473,10 @@ def _get_product_variants(
                     0,
                 )
             ),
+            sellers=_get_variant_sellers(
+                db=db,
+                variant_id=variant.variant_id,
+            ),
         )
         for variant in variants
     ]
@@ -401,14 +489,13 @@ def get_customer_product_detail(
     """
     고객 상품 상세 조회.
 
-    고객에게 노출 가능한 상품만 조회한다.
-
     함께 반환:
     - 상품 기본 정보
     - 카테고리
     - 상품 이미지
     - SKU 옵션
-    - 옵션별 구매 가능 재고
+    - 옵션별 전체 구매 가능 재고
+    - 옵션별 판매사 및 판매사별 구매 가능 재고
     """
 
     row = (
