@@ -1,6 +1,8 @@
 export const ORDER_STATUS_LABELS = {
   CREATED: '주문접수',
+  ORDERED: '주문접수',
   PENDING: '주문대기',
+  PAYMENT_PENDING: '결제대기',
   PAID: '결제완료',
   PREPARING: '상품준비중',
   SHIPPING: '배송중',
@@ -17,6 +19,18 @@ export const REFUND_STATUS_LABELS = {
   REJECTED: '환불거절',
   COMPLETED: '환불완료',
   CANCELLED: '환불취소',
+}
+
+export const RETURN_STATUS_LABELS = {
+  REQUESTED: '반품접수',
+  APPROVED: '반품승인',
+  REJECTED: '반품거절',
+  PICKUP_REQUESTED: '회수요청',
+  PICKED_UP: '회수완료',
+  RECEIVED: '입고완료',
+  INSPECTING: '검수중',
+  COMPLETED: '반품완료',
+  CANCELLED: '반품취소',
 }
 
 export const INQUIRY_STATUS_LABELS = {

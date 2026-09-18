@@ -28,21 +28,24 @@ class CustomerOrderCreateRequest(BaseModel):
     """
     고객 주문 생성 요청.
 
-    장바구니 기능은 현재 구현하지 않는다.
+    org_id가 있는 경우:
+    - 장바구니에서 선택한 판매사 기준 주문
+    - 해당 판매사의 재고만 사용
 
-    고객이 선택하는 정보:
-    - 배송지
-    - 상품
-    - 옵션
-    - 수량
-
-    가격, 주문번호, 주문상태, org_id 등은
-    고객이 직접 전달하지 않고 백엔드에서 결정한다.
+    org_id가 없는 경우:
+    - 기존 바로구매 방식
+    - 백엔드가 주문 가능한 판매사를 자동 선택
     """
 
     address_id: int = Field(
         ge=1,
         description="등록된 배송지 ID",
+    )
+
+    org_id: int | None = Field(
+        default=None,
+        ge=1,
+        description="판매사 조직 ID. 장바구니 주문 시 사용",
     )
 
     items: list[CustomerOrderCreateItem] = Field(

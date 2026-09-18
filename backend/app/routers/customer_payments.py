@@ -17,6 +17,9 @@ from app.schemas.customer_payments import (
     CustomerPaymentStatusResponse,
 )
 from app.services import customer_payments as service
+from app.services.customer_cart_checkout import (
+    remove_paid_order_items_from_cart,
+)
 
 
 router = APIRouter(
@@ -62,17 +65,29 @@ def approve_payment(
     """
     고객 결제 승인.
 
-    현재 단계에서는 실제 PG 서버 호출 대신
-    PG 승인 결과를 전달받았다고 가정하고
-    DB의 결제 승인 흐름을 처리한다.
+    결제가 정상적으로 DONE 상태가 되면
+    해당 주문에 포함된 결제 완료 상품을
+    고객 장바구니에서 제거한다.
+
+    다른 판매사의 상품과
+    selected_yn='N' 상품은 그대로 유지한다.
     """
 
-    return service.approve_customer_payment(
+    payment = service.approve_customer_payment(
         db=db,
         user_id=auth.user_id,
         payment_id=payment_id,
         approve_in=approve_in,
     )
+
+    if payment.payment_status == "DONE":
+        remove_paid_order_items_from_cart(
+            db=db,
+            user_id=auth.user_id,
+            order_id=payment.order_id,
+        )
+
+    return payment
 
 
 @router.get(
