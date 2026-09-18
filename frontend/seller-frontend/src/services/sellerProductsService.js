@@ -43,3 +43,43 @@ export async function updateSellerProduct(productId, values) {
     body: JSON.stringify(values),
   })
 }
+
+// 특정 상품의 옵션/SKU 목록을 불러옵니다.
+export async function getSellerProductVariants(productId) {
+  return apiRequest(
+    `/seller/products/products/${productId}/variants`,
+  )
+}
+
+// 특정 상품에 새로운 옵션/SKU를 등록합니다.
+export async function createSellerProductVariant(productId, values) {
+  return apiRequest(
+    `/seller/products/products/${productId}/variants`,
+    {
+      method: 'POST',
+      body: JSON.stringify(values),
+    },
+  )
+}
+
+// 기존 옵션/SKU 정보를 수정합니다.
+export async function updateSellerProductVariant(variantId, values) {
+  return apiRequest(
+    `/seller/products/variants/${variantId}`,
+    {
+      method: 'PATCH',
+      body: JSON.stringify(values),
+    },
+  )
+}
+
+// 옵션/SKU를 비활성화합니다.
+// DB에서 실제 삭제하지 않고 active_yn을 N으로 변경합니다.
+export async function deactivateSellerProductVariant(variantId) {
+  return apiRequest(
+    `/seller/products/variants/${variantId}`,
+    {
+      method: 'DELETE',
+    },
+  )
+}
