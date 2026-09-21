@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import ProductEditModal from '../components/ProductEditModal'
+import ProductMediaModal from '../components/ProductMediaModal'
 import ProductVariantModal from '../components/ProductVariantModal'
 import {
   createSellerProduct,
@@ -60,6 +61,11 @@ function ProductsPage() {
   const [editingProduct, setEditingProduct] = useState(null)
   // 옵션/SKU를 관리할 상품을 저장합니다.
   const [variantProduct, setVariantProduct] = useState(null)
+  // 이미지와 첨부파일을 관리할 상품을 저장합니다.
+  const [mediaProduct, setMediaProduct] = useState(null)
+  // 미디어 단계에서 상품 정보 수정으로 돌아온 상태인지 구분합니다.
+  const [returnToMediaAfterEdit, setReturnToMediaAfterEdit] =
+    useState(false)
 
   const [refreshKey, setRefreshKey] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
@@ -220,8 +226,11 @@ function ProductsPage() {
       setRefreshKey((currentKey) => currentKey + 1)
 
       setSuccessMessage(
-        `${createdProduct.product_name} 상품이 등록되었습니다.`,
+        `${createdProduct.product_name} 상품의 기본 정보가 등록되었습니다.`,
       )
+
+      // 상품 ID가 만들어진 뒤 이미지와 첨부파일을 이어서 등록합니다.
+      setMediaProduct(createdProduct)
     } catch (error) {
       setCreateErrorMessage(error.message)
     } finally {
@@ -233,9 +242,42 @@ function ProductsPage() {
   function handleProductUpdated(updatedProduct) {
     setEditingProduct(null)
     setRefreshKey((currentKey) => currentKey + 1)
+
+    if (returnToMediaAfterEdit) {
+      setReturnToMediaAfterEdit(false)
+      setMediaProduct(updatedProduct)
+      setSuccessMessage('상품 기본 정보가 수정되었습니다.')
+      return
+    }
+
     setSuccessMessage(
       `${updatedProduct.product_name} 상품이 수정되었습니다.`,
     )
+  }
+
+  function handleProductEditClose() {
+    if (returnToMediaAfterEdit && editingProduct) {
+      setMediaProduct(editingProduct)
+    }
+
+    setReturnToMediaAfterEdit(false)
+    setEditingProduct(null)
+  }
+
+  function handleMediaBack() {
+    if (!mediaProduct) {
+      return
+    }
+
+    setEditingProduct(mediaProduct)
+    setMediaProduct(null)
+    setReturnToMediaAfterEdit(true)
+    setSuccessMessage('')
+  }
+
+  function handleMediaClose() {
+    setMediaProduct(null)
+    setReturnToMediaAfterEdit(false)
   }
 
   return (
@@ -450,7 +492,7 @@ function ProductsPage() {
         <ProductEditModal
           product={editingProduct}
           categories={categories}
-          onClose={() => setEditingProduct(null)}
+          onClose={handleProductEditClose}
           onUpdated={handleProductUpdated}
         />
       )}
@@ -459,6 +501,14 @@ function ProductsPage() {
         <ProductVariantModal
           product={variantProduct}
           onClose={() => setVariantProduct(null)}
+        />
+      )}
+
+      {mediaProduct && (
+        <ProductMediaModal
+          product={mediaProduct}
+          onBack={handleMediaBack}
+          onClose={handleMediaClose}
         />
       )}
 
@@ -583,6 +633,7 @@ function ProductsPage() {
                           type="button"
                           onClick={() => {
                             setSuccessMessage('')
+                            setReturnToMediaAfterEdit(false)
                             setEditingProduct(product)
                           }}
                         >
@@ -598,6 +649,17 @@ function ProductsPage() {
                           }}
                         >
                           옵션 관리
+                        </button>
+
+                        <button
+                          className="product-edit-button"
+                          type="button"
+                          onClick={() => {
+                            setSuccessMessage('')
+                            setMediaProduct(product)
+                          }}
+                        >
+                          이미지·파일
                         </button>
                       </div>
                     </td>
