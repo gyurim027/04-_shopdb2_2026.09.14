@@ -116,6 +116,24 @@ def change_user_status(
     auth: AuthContext = Depends(require_admin),
 ) -> UserOut:
     """특정 회원의 상태(ACTIVE, SUSPENDED, WITHDRAWN 등)를 변경합니다."""
+    
+    # 💡 [보안 검증] 지점장(BRANCH) 권한 검사
+    if auth.org_type != 'HEADQUARTER' and body.user_status == 'WITHDRAWN':
+        # 1. 본인 계정을 직접 탈퇴시키려는 경우 차단
+        if user_id == auth.user_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="지점장 본인 계정은 스스로 삭제(탈퇴)할 수 없습니다."
+            )
+        
+        # 2. 대상 사용자가 내 지사 소속이 아닌 경우 차단
+        target_user = db.query(User).filter(User.user_id == user_id).first()
+        if not target_user or target_user.org_id != auth.org_id:
+            raise HTTPException(
+                status_code=status.HTTP_403_FORBIDDEN,
+                detail="본인 지사에 속한 회원만 삭제할 수 있습니다."
+            )
+
     return service.update_user_status(db, auth, user_id=user_id, new_status=body.user_status)
 
 @router.patch("/users/{user_id}/roles", response_model=UserOut)

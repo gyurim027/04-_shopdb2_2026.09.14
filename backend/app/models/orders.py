@@ -3,6 +3,25 @@ from sqlalchemy.orm import relationship
 from sqlalchemy.sql import func
 from app.core.database import Base
 
+# 💡 [추가] Order와 연결되는 OrderItem 모델 클래스를 Order보다 위에 정의합니다.
+class OrderItem(Base):
+    __tablename__ = "order_items"
+
+    order_item_id = Column(BigInteger, primary_key=True, index=True)
+    order_id = Column(BigInteger, ForeignKey("orders.order_id"), nullable=False)
+    product_id = Column(BigInteger, nullable=False)
+    variant_id = Column(BigInteger, nullable=True)
+    product_name_snapshot = Column(String(200), nullable=False)
+    sku_snapshot = Column(String(100), nullable=True)
+    quantity = Column(Numeric, nullable=False)
+    unit_price = Column(Numeric(15, 2), nullable=False)
+    item_amount = Column(Numeric(15, 2), nullable=False)
+    item_status = Column(String(30), default="ORDERED")
+
+    # Order와의 관계 설정
+    order = relationship("Order", back_populates="order_items")
+
+
 class Order(Base):
     __tablename__ = "orders"
 
@@ -22,8 +41,9 @@ class Order(Base):
     shipping_address2 = Column(String(300), nullable=True)
     ordered_at = Column(DateTime(timezone=True), server_default=func.now())
     updated_at = Column(DateTime(timezone=True), onupdate=func.now(), server_default=func.now())
-
+    
     # 관계 설정
+    order_items = relationship("OrderItem", back_populates="order", cascade="all, delete-orphan")
     payments = relationship("Payment", back_populates="order", cascade="all, delete-orphan")
     buyer = relationship("User", foreign_keys=[buyer_user_id])
 

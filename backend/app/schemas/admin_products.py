@@ -2,6 +2,7 @@
 
 from datetime import datetime
 from decimal import Decimal
+from typing import Optional, List
 
 from pydantic import BaseModel, ConfigDict, Field, computed_field
 
@@ -118,6 +119,18 @@ class VariantOut(BaseModel):
     active_yn: str
 
 
+class VariantInInventory(BaseModel):
+    variant_id: int
+    sku_code: str
+    option_name1: Optional[str] = None
+    option_value1: Optional[str] = None
+    option_name2: Optional[str] = None
+    option_value2: Optional[str] = None
+    product: Optional[ProductOut] = None  # 💡 ProductResponse 대신 올바른 ProductOut 연결
+
+    model_config = ConfigDict(from_attributes=True)
+
+
 # --- Product images --------------------------------------------------------
 
 
@@ -203,6 +216,9 @@ class InventoryOut(BaseModel):
     reserved_quantity: int
     safety_stock: int
     updated_at: datetime
+    
+    # 💡 [추가] 재고 조회 시 연결된 variant(옵션 및 상품 정보)를 함께 응답하도록 매핑
+    variant: Optional[VariantInInventory] = None
 
     @computed_field
     @property

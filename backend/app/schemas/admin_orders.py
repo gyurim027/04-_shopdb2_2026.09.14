@@ -1,15 +1,29 @@
 """Pydantic schemas for admin_orders (orders, payments/settlements, dashboard)."""
 
 from datetime import datetime
-from typing import Optional
+from typing import Optional, List
 from decimal import Decimal
 from pydantic import BaseModel, ConfigDict, Field
 
-# 주문 상태 변경 요청 스키마
+# 1. 주문 상품 개별 상세 정보 응답 스키마
+class OrderItemResponse(BaseModel):
+    model_config = ConfigDict(from_attributes=True)
+
+    order_item_id: int
+    product_id: int
+    variant_id: Optional[int] = None
+    product_name_snapshot: str
+    sku_snapshot: Optional[str] = None
+    quantity: int
+    unit_price: Decimal
+    item_amount: Decimal
+    item_status: Optional[str] = None
+
+# 2. 주문 상태 변경 요청 스키마
 class OrderStatusUpdate(BaseModel):
     status: str = Field(..., description="변경할 주문 상태 (예: PREPARING, SHIPPING, COMPLETED, CANCELLED)")
 
-# 주문 응답 스키마
+# 3. 주문 응답 스키마 (order_items 목록 포함)
 class OrderResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -29,8 +43,11 @@ class OrderResponse(BaseModel):
     shipping_address2: Optional[str] = None
     ordered_at: Optional[datetime] = None
     updated_at: Optional[datetime] = None
+    
+    # 주문에 속한 상품 목록 필드
+    order_items: List[OrderItemResponse] = []
 
-# 결제/정산 내역 응답 스키마
+# 4. 결제/정산 내역 응답 스키마
 class SettlementResponse(BaseModel):
     model_config = ConfigDict(from_attributes=True)
 
@@ -52,7 +69,7 @@ class SettlementResponse(BaseModel):
     cancelled_at: Optional[datetime] = None
     created_at: datetime
 
-# 대시보드 요약 지표 응답 스키마
+# 5. 대시보드 요약 지표 응답 스키마
 class DashboardSummaryOut(BaseModel):
     model_config = ConfigDict(from_attributes=True)
     

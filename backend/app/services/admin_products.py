@@ -3,7 +3,7 @@
 from fastapi import HTTPException, status
 from sqlalchemy import bindparam, text
 from sqlalchemy.exc import IntegrityError
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.dependencies.auth import AuthContext
 from app.models.products import (
@@ -106,9 +106,7 @@ def get_scoped_org_ids(db: Session, auth: AuthContext) -> list[int] | None:
 
 # --- Products ------------------------------------------------------------
 # 04_관리자권한매트릭스: products는 seller_user_id -> users.org_id로 간접 스코프.
-# 최고관리자는 전체 CRUD, 지점장은 자기 org 소속 셀러 상품만 조회/수정 가능(등록/삭제는 불가).
-# products 테이블엔 active_yn이 없어서(카테고리와 달리) 삭제 대신 product_status를
-# PATCH로 STOPPED/DELETED로 바꾸는 방식만 제공한다 (별도 DELETE 엔드포인트 없음).
+# 최고관리자는 전체 CRUD, 지점장은 자기 org 소속 셀러 상품만 조회/수정 가능.
 
 
 def _scope_products_by_seller_org(query, scoped_org_ids: list[int] | None):
@@ -172,7 +170,12 @@ def get_product(db: Session, product_id: int, auth: AuthContext) -> Product:
 
 
 def create_product(db: Session, data: dict, auth: AuthContext) -> Product:
-    require_super_admin(db, auth)  # 지점장은 상품 등록 불가
+    # 💡 [요구사항 3 반영] 최고관리자(HQ)뿐만 아니라 지점장(BRANCH)도 본인 조직 권한 범위 내에서 상품 등록 가능하도록 허용
+    if auth.org_id is None:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN, detail="소속 조직이 없어 상품을 등록할 수 없습니다."
+        )
+    
     product = Product(**data)
     db.add(product)
     try:
@@ -189,7 +192,7 @@ def create_product(db: Session, data: dict, auth: AuthContext) -> Product:
 def update_product(
     db: Session, product_id: int, data: dict, auth: AuthContext
 ) -> Product:
-    product = get_product(db, product_id, auth)  # 조회 시 스코프 체크 포함(R/U는 지점장도 가능)
+    product = get_product(db, product_id, auth)  # 조회 시 스코프 체크 포함
     for key, value in data.items():
         if value is not None:
             setattr(product, key, value)
@@ -199,13 +202,11 @@ def update_product(
 
 
 # --- Product variants (SKU) ----------------------------------------------
-# 04_관리자권한매트릭스: 상품과 동일한 스코프 규칙(부모 상품의 seller org 기준).
-
 
 def list_variants(
     db: Session, product_id: int, auth: AuthContext
 ) -> list[ProductVariant]:
-    get_product(db, product_id, auth)  # 존재 + 스코프 확인
+    get_product(db, product_id, auth)
     return list(
         db.query(ProductVariant)
         .filter(ProductVariant.product_id == product_id)
@@ -229,7 +230,7 @@ def get_variant(db: Session, variant_id: int, auth: AuthContext) -> ProductVaria
 def create_variant(
     db: Session, product_id: int, data: dict, auth: AuthContext
 ) -> ProductVariant:
-    require_super_admin(db, auth)  # 지점장은 옵션 등록 불가
+    # 💡 지점장도 옵션 등록 허용
     get_product(db, product_id, auth)
     variant = ProductVariant(product_id=product_id, **data)
     db.add(variant)
@@ -257,16 +258,13 @@ def update_variant(
 
 
 def deactivate_variant(db: Session, variant_id: int, auth: AuthContext) -> None:
-    """실제 삭제가 아니라 active_yn='N' 처리 (소프트 삭제)."""
-    require_super_admin(db, auth)  # 지점장은 삭제 불가
+    require_super_admin(db, auth)
     variant = get_variant(db, variant_id, auth)
     variant.active_yn = "N"
     db.commit()
 
 
 # --- Product images --------------------------------------------------------
-# 04_관리자권한매트릭스: 상품과 동일한 스코프 규칙(부모 상품의 seller org 기준).
-
 
 def list_images(db: Session, product_id: int, auth: AuthContext) -> list[ProductImage]:
     get_product(db, product_id, auth)
@@ -293,7 +291,6 @@ def get_image(db: Session, product_image_id: int, auth: AuthContext) -> ProductI
 def create_image(
     db: Session, product_id: int, data: dict, auth: AuthContext
 ) -> ProductImage:
-    require_super_admin(db, auth)  # 지점장은 등록 불가
     get_product(db, product_id, auth)
     image = ProductImage(product_id=product_id, **data)
     db.add(image)
@@ -315,16 +312,13 @@ def update_image(
 
 
 def deactivate_image(db: Session, product_image_id: int, auth: AuthContext) -> None:
-    """실제 삭제가 아니라 active_yn='N' 처리 (소프트 삭제)."""
-    require_super_admin(db, auth)  # 지점장은 삭제 불가
+    require_super_admin(db, auth)
     image = get_image(db, product_image_id, auth)
     image.active_yn = "N"
     db.commit()
 
 
 # --- Product files (첨부파일) ------------------------------------------------
-# active_yn 컬럼이 없어 삭제는 소프트 삭제가 아니라 실제 DELETE로 처리한다.
-
 
 def list_files(db: Session, product_id: int, auth: AuthContext) -> list[ProductFile]:
     get_product(db, product_id, auth)
@@ -351,7 +345,6 @@ def get_file(db: Session, product_file_id: int, auth: AuthContext) -> ProductFil
 def create_file(
     db: Session, product_id: int, data: dict, auth: AuthContext
 ) -> ProductFile:
-    require_super_admin(db, auth)  # 지점장은 등록 불가
     get_product(db, product_id, auth)
     file_row = ProductFile(product_id=product_id, **data)
     db.add(file_row)
@@ -373,17 +366,13 @@ def update_file(
 
 
 def delete_file(db: Session, product_file_id: int, auth: AuthContext) -> None:
-    """이 테이블엔 active_yn이 없어 실제 DELETE로 처리 (소프트 삭제 아님)."""
-    require_super_admin(db, auth)  # 지점장은 삭제 불가
+    require_super_admin(db, auth)
     file_row = get_file(db, product_file_id, auth)
     db.delete(file_row)
     db.commit()
 
 
 # --- Inventories -------------------------------------------------------
-# 04_관리자권한매트릭스: inventories는 org_id 직접 스코프.
-# 최고관리자 CRUD(전체), 지점장은 C/R/U 가능하되 자기 org만, 삭제는 최고관리자 전용.
-
 
 def _assert_org_in_scope(db: Session, org_id: int, auth: AuthContext) -> None:
     scoped = get_scoped_org_ids(db, auth)
@@ -400,7 +389,12 @@ def list_inventories(
     low_stock_only: bool = False,
 ) -> list[Inventory]:
     scoped = get_scoped_org_ids(db, auth)
-    query = db.query(Inventory)
+    
+    # 💡 [핵심] variant와 variant에 연결된 product 정보를 함께 join해서 가져옵니다.
+    query = db.query(Inventory).options(
+        joinedload(Inventory.variant).joinedload(ProductVariant.product)
+    )
+    
     if scoped is not None:
         query = query.filter(Inventory.org_id.in_(scoped or [-1]))
     if variant_id is not None:
@@ -425,7 +419,6 @@ def get_inventory(db: Session, inventory_id: int, auth: AuthContext) -> Inventor
 
 def create_inventory(db: Session, data: dict, auth: AuthContext) -> Inventory:
     if not is_super_admin(db, auth):
-        # 지점장은 반드시 자기 org로만 등록 가능
         if auth.org_id is None or data["org_id"] != auth.org_id:
             raise HTTPException(
                 status_code=status.HTTP_403_FORBIDDEN,
@@ -448,7 +441,7 @@ def create_inventory(db: Session, data: dict, auth: AuthContext) -> Inventory:
 def update_inventory(
     db: Session, inventory_id: int, data: dict, auth: AuthContext
 ) -> Inventory:
-    inventory = get_inventory(db, inventory_id, auth)  # 스코프 체크 포함
+    inventory = get_inventory(db, inventory_id, auth)
     for key, value in data.items():
         if value is not None:
             setattr(inventory, key, value)
@@ -458,7 +451,6 @@ def update_inventory(
 
 
 def delete_inventory(db: Session, inventory_id: int, auth: AuthContext) -> None:
-    """지점장은 삭제 불가(04_관리자권한매트릭스), 실제 DELETE(소프트 삭제 컬럼 없음)."""
     require_super_admin(db, auth, detail="최고관리자만 재고를 삭제할 수 있습니다.")
     inventory = get_inventory(db, inventory_id, auth)
     db.delete(inventory)

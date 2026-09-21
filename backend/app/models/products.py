@@ -8,7 +8,7 @@ from datetime import datetime
 from decimal import Decimal
 
 from sqlalchemy import DateTime, ForeignKey, Integer, Numeric, String, Text, func
-from sqlalchemy.orm import Mapped, mapped_column
+from sqlalchemy.orm import Mapped, mapped_column, relationship
 
 from app.core.database import Base
 
@@ -51,6 +51,9 @@ class Product(Base):
         DateTime, server_default=func.now(), onupdate=func.now()
     )
 
+    # 💡 [추가] ProductVariant와의 역방향 관계 설정 (joinedload 탐색용)
+    variants = relationship("ProductVariant", back_populates="product", cascade="all, delete-orphan")
+
 
 class ProductVariant(Base):
     __tablename__ = "product_variants"
@@ -68,6 +71,9 @@ class ProductVariant(Base):
         Numeric(15, 2), nullable=False, default=0
     )
     active_yn: Mapped[str] = mapped_column(String(1), nullable=False, default="Y")
+
+    # 💡 [추가] Product와의 관계 설정
+    product = relationship("Product", back_populates="variants")
 
 
 class ProductImage(Base):
@@ -118,3 +124,6 @@ class Inventory(Base):
     updated_at: Mapped[datetime] = mapped_column(
         DateTime, server_default=func.now(), onupdate=func.now()
     )
+
+    # 💡 [추가] ProductVariant와의 관계 설정 (joinedload 사용을 위해 필수)
+    variant = relationship("ProductVariant")
