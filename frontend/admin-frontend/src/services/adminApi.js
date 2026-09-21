@@ -30,3 +30,7 @@ export const createCompanyPolicy = (data) => adminClient.post('/support/policies
 // 상품 옵션/SKU 관련
 export const fetchProductVariants = (productId) => adminClient.get(`/products/products/${productId}/variants`);
 export const createProductVariant = (productId, data) => adminClient.post(`/products/products/${productId}/variants`, data);
+
+// 고객 문의 관련
+export const fetchInquiries = () => adminClient.get('/inquiries');
+export const answerInquiry = (id, data) => adminClient.post(`/support/inquiries/${id}/answer`, data);

@@ -1,5 +1,5 @@
 from fastapi import HTTPException, status
-from sqlalchemy.orm import Session
+from sqlalchemy.orm import Session, joinedload
 
 from app.dependencies.auth import AuthContext
 from app.models.orders import Order, Payment
@@ -14,7 +14,8 @@ def get_orders(
     limit: int = 10,
     status_filter: str | None = None,
 ) -> list[Order]:
-    query = db.query(Order)
+    # 💡 joinedload(Order.order_items)를 추가하여 주문에 속한 상품 정보들을 함께 로드합니다.
+    query = db.query(Order).options(joinedload(Order.order_items))
     
     # 수정: 이제 Order 테이블에 org_id가 존재하므로 User 조인 불필요
     scoped = get_scoped_org_ids(db, auth)

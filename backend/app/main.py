@@ -2,6 +2,7 @@ from fastapi import Depends, FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from sqlalchemy import text
 from sqlalchemy.orm import Session
+from app.routers import admin_db
 
 from app.core.config import settings
 from app.core.database import get_db
@@ -117,3 +118,4 @@ for router in (
         router,
         prefix=settings.api_prefix,
     )
+    app.include_router(admin_db.router)

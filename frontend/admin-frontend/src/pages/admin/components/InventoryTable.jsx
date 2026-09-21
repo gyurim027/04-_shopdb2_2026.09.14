@@ -1,80 +1,150 @@
-import React from 'react';
-import { Table, Tag, Button, Typography, Space } from 'antd';
+import React, { useState } from 'react';
+import { Table, Tag, Button, Typography, Space, Radio } from 'antd';
 
 const { Text } = Typography;
 
 export default function InventoryTable({ inventories, products, organizations, userInfo, onAdjustStock, onAdjustPrice, loading }) {
-  const getProductInfo = (variantId) => {
-    let pId = 1;
-    if (variantId === 1 || variantId === 2) pId = 1;
-    else if (variantId === 3) pId = 2;
-    else if (variantId === 4 || variantId === 5) pId = 3;
-    else if (variantId === 6) pId = 4;
-    else if (variantId === 7 || variantId === 8) pId = 5;
-    else if (variantId === 9) pId = 6;
-    
-    const p = products.find(x => x.product_id === pId) || {};
-    
-    let variantLabel = ` (V: ${variantId})`;
-    if (variantId === 1) variantLabel = ' (SKU-NOTE-16)';
-    else if (variantId === 2) variantLabel = ' (SKU-NOTE-32)';
-    else if (variantId === 3) variantLabel = ' (SKU-PHONE-BLK)';
-    else if (variantId === 4) variantLabel = ' (SKU-HOOD-L)';
-    else if (variantId === 5) variantLabel = ' (SKU-HOOD-XL)';
-    else if (variantId === 6) variantLabel = ' (SKU-RUN-270)';
-    else if (variantId === 7) variantLabel = ' (SKU-AI-32)';
-    else if (variantId === 8) variantLabel = ' (SKU-AI-64)';
+  const [selectedOrgId, setSelectedOrgId] = useState('all');
 
-    return {
-      id: pId,
-      name: p.product_name || `상품 ID: ${pId}`,
-      variantLabel,
-      regularPrice: p.regular_price || 100000,
-      salePrice: p.sale_price || 90000,
-      status: p.product_status || 'SALE'
-    };
-  };
+  // 💡 본사(1번)를 제외한 지사 목록만 필터링 탭에 사용
+  const branchOrganizations = organizations ? organizations.filter(org => Number(org.org_id) !== 1) : [];
+
+  // 💡 선택된 탭에 따라 재고 데이터 필터링
+  const filteredInventories = (userInfo?.orgType === 'HEADQUARTER' && selectedOrgId !== 'all')
+    ? inventories.filter(inv => Number(inv.org_id) === Number(selectedOrgId))
+    : (userInfo?.orgType === 'HEADQUARTER' 
+        ? inventories.filter(inv => Number(inv.org_id) !== 1) // 전체 보기일 때도 본사 제외하고 지사들만 모아서 보여줌
+        : inventories);
 
   const columns = [
-    { title: '재고 ID', dataIndex: 'inventory_id', width: 90, align: 'center' },
-    { title: '지점명 (조직)', dataIndex: 'org_id', width: 160, render: (orgId) => {
-        const matchedOrg = organizations.find(o => o.org_id === orgId);
-        return <span style={{ whiteSpace: 'nowrap' }}>{matchedOrg ? matchedOrg.org_name : `지점 ID: ${orgId}`}</span>;
-    }},
-    { title: '상품명 (옵션/SKU)', width: 220, render: (_, r) => {
-        const info = getProductInfo(r.variant_id);
-        return <Text strong style={{ whiteSpace: 'nowrap' }}>{info.name} <Text type="secondary">{info.variantLabel}</Text></Text>;
-    }},
-    { title: '정가', width: 120, align: 'right', render: (_, r) => <Text delete type="secondary" style={{ whiteSpace: 'nowrap' }}>{Number(getProductInfo(r.variant_id).regularPrice).toLocaleString()} 원</Text> },
-    { title: '세일가', width: 120, align: 'right', render: (_, r) => <Text type="danger" strong style={{ whiteSpace: 'nowrap' }}>{Number(getProductInfo(r.variant_id).salePrice).toLocaleString()} 원</Text> },
-    { title: '세일 상태', width: 130, align: 'center', render: (_, r) => {
-        const info = getProductInfo(r.variant_id);
-        const isSale = info.status === 'SALE';
-        return <Tag color={isSale ? 'success' : 'error'}>{isSale ? `세일중 (${info.status})` : info.status}</Tag>;
-    }},
-    { title: '가용 재고 수량', dataIndex: 'stock_quantity', width: 110, align: 'center', render: t => <Text type="success" strong>{t} 개</Text> },
-    { title: '관리 작업', width: 170, align: 'center', render: (_, r) => {
-        const info = getProductInfo(r.variant_id);
+    { 
+      title: <span style={{ whiteSpace: 'nowrap' }}>재고 ID</span>, 
+      dataIndex: 'inventory_id', 
+      width: 90, 
+      align: 'center' 
+    },
+    { 
+      title: <span style={{ whiteSpace: 'nowrap' }}>지점명 (조직)</span>, 
+      dataIndex: 'org_id', 
+      width: 150, 
+      render: (orgId) => {
+        const matchedOrg = organizations.find(o => Number(o.org_id) === Number(orgId));
+        return <span style={{ whiteSpace: 'nowrap' }}>{matchedOrg ? `${matchedOrg.org_name} (ID: ${orgId})` : `지점 ID: ${orgId}`}</span>;
+      }
+    },
+    { 
+      title: <span style={{ whiteSpace: 'nowrap' }}>상품명 (옵션/SKU)</span>, 
+      width: 380, 
+      render: (_, r) => {
+        const variantData = r.variant || {};
+        const productData = variantData.product || r.product || products[0] || {};
+        
+        const productName = productData.product_name || `상품 ID: ${r.variant_id}`;
+        
+        const opt1Name = variantData.option_name1 || '구매옵션';
+        const opt1Val = variantData.option_value1 || '기본 상품';
+        const opt2Name = variantData.option_name2;
+        const opt2Val = variantData.option_value2;
+
+        let optionText = `${opt1Name}: ${opt1Val}`;
+        if (opt2Name && opt2Val) {
+          optionText += `, ${opt2Name}: ${opt2Val}`;
+        }
+
+        return (
+          <Text strong style={{ whiteSpace: 'nowrap', overflow: 'hidden', textOverflow: 'ellipsis', display: 'block', maxWidth: '360px' }}>
+            {productName} <Text type="secondary">({optionText})</Text>
+          </Text>
+        );
+      } 
+    },
+    { 
+      title: <span style={{ whiteSpace: 'nowrap' }}>정가</span>, 
+      width: 110, 
+      align: 'right', 
+      render: (_, r) => {
+        const productData = (r.variant && r.variant.product) || r.product || products[0] || {};
+        return <Text delete type="secondary" style={{ whiteSpace: 'nowrap' }}>{Number(productData.regular_price || 19000).toLocaleString()} 원</Text>;
+      } 
+    },
+    { 
+      title: <span style={{ whiteSpace: 'nowrap' }}>세일가</span>, 
+      width: 110, 
+      align: 'right', 
+      render: (_, r) => {
+        const productData = (r.variant && r.variant.product) || r.product || products[0] || {};
+        return <Text type="danger" strong style={{ whiteSpace: 'nowrap' }}>{Number(productData.sale_price || 7220).toLocaleString()} 원</Text>;
+      } 
+    },
+    { 
+      title: <span style={{ whiteSpace: 'nowrap' }}>세일 상태</span>, 
+      width: 120, 
+      align: 'center', 
+      render: (_, r) => {
+        const productData = (r.variant && r.variant.product) || r.product || products[0] || {};
+        const status = productData.product_status || 'SALE';
+        const isSale = status === 'SALE';
+        return <Tag color={isSale ? 'success' : 'error'} style={{ whiteSpace: 'nowrap' }}>{isSale ? `세일중 (${status})` : status}</Tag>;
+      } 
+    },
+    { 
+      title: <span style={{ whiteSpace: 'nowrap' }}>가용 재고 수량</span>, 
+      dataIndex: 'stock_quantity', 
+      width: 120, 
+      align: 'center', 
+      render: t => <Text type="success" strong style={{ whiteSpace: 'nowrap' }}>{t ?? 0} 개</Text> 
+    },
+    { 
+      title: <span style={{ whiteSpace: 'nowrap' }}>관리 작업</span>, 
+      width: 160, 
+      align: 'center', 
+      render: (_, r) => {
+        const productData = (r.variant && r.variant.product) || r.product || products[0] || {};
+        const pId = productData.product_id || 1;
+        const pName = productData.product_name || '상품';
+        const sPrice = productData.sale_price || 7220;
         return (
           <Space size="small">
             <Button size="small" style={{ backgroundColor: '#fa8c16', color: 'white', border: 'none' }} onClick={() => onAdjustStock(r.inventory_id, r.stock_quantity)}>재고 조정</Button>
             {userInfo.orgType === 'HEADQUARTER' && (
-              <Button size="small" style={{ backgroundColor: '#722ed1', color: 'white', border: 'none' }} onClick={() => onAdjustPrice(info.id, info.salePrice, info.name)}>가격 변경</Button>
+              <Button size="small" style={{ backgroundColor: '#722ed1', color: 'white', border: 'none' }} onClick={() => onAdjustPrice(pId, sPrice, pName)}>가격 변경</Button>
             )}
           </Space>
         );
-    }},
+      } 
+    },
   ];
 
   return (
-    <Table 
-      columns={columns} 
-      dataSource={inventories} 
-      rowKey="inventory_id"
-      loading={loading}
-      pagination={{ pageSize: 10 }}
-      size="middle"
-      scroll={{ x: 1100 }}
-    />
+    <div>
+      {/* 💡 주문 탭처럼 본사(1번)를 제외한 지사들만 탭으로 노출 */}
+      {userInfo?.orgType === 'HEADQUARTER' && branchOrganizations.length > 0 && (
+        <div style={{ marginBottom: '16px' }}>
+          <Radio.Group value={selectedOrgId} onChange={(e) => setSelectedOrgId(e.target.value)} buttonStyle="solid">
+            <Radio.Button value="all">
+              전체 보기 ({inventories.filter(inv => Number(inv.org_id) !== 1).length})
+            </Radio.Button>
+            {branchOrganizations.map(org => {
+              const count = inventories.filter(inv => Number(inv.org_id) === Number(org.org_id)).length;
+              return (
+                <Radio.Button key={org.org_id} value={org.org_id}>
+                  {org.org_name} ({count})
+                </Radio.Button>
+              );
+            })}
+          </Radio.Group>
+        </div>
+      )}
+
+      <Table 
+        columns={columns} 
+        dataSource={filteredInventories} 
+        rowKey="inventory_id"
+        loading={loading}
+        pagination={{ pageSize: 10 }}
+        size="middle"
+        scroll={{ x: 1250 }}
+      />
+    </div>
   );
 }
