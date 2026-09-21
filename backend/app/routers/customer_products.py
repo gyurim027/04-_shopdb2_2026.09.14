@@ -3,6 +3,7 @@ from fastapi import (
     Depends,
     Query,
 )
+from fastapi.responses import FileResponse
 from sqlalchemy.orm import Session
 
 from app.core.database import get_db
@@ -71,7 +72,7 @@ def get_products(
     """
     고객 상품 목록 및 검색.
 
-    사용할 수 있는 기능:
+    사용 가능한 기능:
     - 전체 상품 목록
     - 페이지 처리
     - 카테고리 필터
@@ -88,6 +89,46 @@ def get_products(
         size=size,
         category_id=category_id,
         keyword=keyword,
+    )
+
+
+@router.get(
+    "/assets/{file_id}/content",
+    response_class=FileResponse,
+)
+def get_product_asset_content(
+    file_id: int,
+    db: Session = Depends(get_db),
+) -> FileResponse:
+    """
+    고객 상품 이미지 파일 조회.
+
+    고객에게 공개 가능한 상품의 이미지 파일만 반환한다.
+
+    공개 조건:
+    - 활성 파일
+    - 상품 이미지로 연결된 파일
+    - 활성 상품 이미지
+    - SALE 또는 SOLD_OUT 상품
+    - LOCAL 저장 파일
+    - uploads 디렉터리 내부 실제 파일
+
+    storage_path는 고객에게 직접 노출하지 않는다.
+    """
+
+    asset, file_path = (
+        service.get_customer_product_asset_content(
+            db=db,
+            file_id=file_id,
+        )
+    )
+
+    return FileResponse(
+        path=str(file_path),
+        media_type=(
+            asset.mime_type
+            or "application/octet-stream"
+        ),
     )
 
 
@@ -109,6 +150,10 @@ def get_product_detail(
     - 상품 이미지
     - SKU 옵션
     - 옵션별 구매 가능 재고
+    - 판매사 정보
+
+    상품 이미지에는 MAIN / DETAIL 구분과
+    고객 이미지 조회용 content_url이 포함된다.
     """
 
     return service.get_customer_product_detail(
