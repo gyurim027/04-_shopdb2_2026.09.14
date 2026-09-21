@@ -9,7 +9,13 @@ const menuItems = [
   { label: '상품 관리', path: '/products' },
   { label: '재고 관리', path: '/inventory' },
   { label: '주문 관리', path: '/orders' },
+
+  // 반품은 상품 회수와 검수를 처리하는 별도 업무입니다.
+  { label: '반품 관리', path: '/returns' },
+
+  // 환불은 금액 반환 요청을 확인하는 업무입니다.
   { label: '환불 관리', path: '/refunds' },
+
   { label: '매출', path: '/sales' },
   { label: '내 정보', path: '/info' },
 ]
@@ -36,7 +42,10 @@ function SellerLayout() {
           </div>
         </div>
 
-        <nav className="seller-navigation" aria-label="셀러 콘솔 메뉴">
+        <nav
+          className="seller-navigation"
+          aria-label="셀러 콘솔 메뉴"
+        >
           {menuItems.map((menu) => (
             <NavLink
               className={({ isActive }) =>
@@ -58,7 +67,7 @@ function SellerLayout() {
             <span>판매자 전용</span>
           </div>
 
-          {/* 클릭하면 로그인 정보를 지우고 로그인 화면으로 이동합니다. */}
+          {/* 로그인 정보를 지우고 로그인 화면으로 이동합니다. */}
           <button
             className="seller-account-button"
             type="button"
