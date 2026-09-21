@@ -5,6 +5,7 @@ from app.core.database import get_db
 from app.dependencies.auth import AuthContext, require_customer
 from app.schemas.customer_returns import (
     CustomerReturnCreateRequest,
+    CustomerReturnCreateResponse,
     CustomerReturnListResponse,
     CustomerReturnResponse,
     CustomerReturnStatusResponse,
@@ -20,16 +21,19 @@ router = APIRouter(
 
 @router.post(
     "",
-    response_model=CustomerReturnResponse,
+    response_model=CustomerReturnCreateResponse,
     status_code=status.HTTP_201_CREATED,
 )
 def create_return(
     return_in: CustomerReturnCreateRequest,
     auth: AuthContext = Depends(require_customer),
     db: Session = Depends(get_db),
-) -> CustomerReturnResponse:
+) -> CustomerReturnCreateResponse:
     """
-    로그인한 고객이 본인의 주문에 대해 반품을 신청한다.
+    고객 반품 신청.
+
+    한 번의 신청에 여러 판매사의 상품이 포함되면
+    백엔드가 판매사별로 반품 요청을 분리해서 생성한다.
     """
 
     return service.create_customer_return(
@@ -58,10 +62,6 @@ def get_returns(
     auth: AuthContext = Depends(require_customer),
     db: Session = Depends(get_db),
 ) -> CustomerReturnListResponse:
-    """
-    로그인한 고객 본인의 반품 요청 목록을 조회한다.
-    """
-
     return service.get_customer_returns(
         db=db,
         user_id=auth.user_id,
@@ -79,10 +79,6 @@ def get_return_status(
     auth: AuthContext = Depends(require_customer),
     db: Session = Depends(get_db),
 ) -> CustomerReturnStatusResponse:
-    """
-    특정 반품 요청의 현재 처리 상태를 조회한다.
-    """
-
     return service.get_customer_return_status(
         db=db,
         user_id=auth.user_id,
@@ -99,10 +95,6 @@ def get_return_detail(
     auth: AuthContext = Depends(require_customer),
     db: Session = Depends(get_db),
 ) -> CustomerReturnResponse:
-    """
-    특정 반품 요청의 상세 내용을 조회한다.
-    """
-
     return service.get_customer_return_detail(
         db=db,
         user_id=auth.user_id,

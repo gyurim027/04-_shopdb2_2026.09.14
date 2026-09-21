@@ -515,3 +515,161 @@
   cursor: not-allowed;
   background: #fbfbfb;
 }
+
+.product-action-buttons {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.product-variant-table {
+  min-width: 720px;
+}
+
+.variant-section-header {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 20px;
+  padding: 20px;
+}
+
+.variant-section-header h3,
+.variant-form-heading h3 {
+  margin: 0;
+  color: #000000;
+  font-size: 16px;
+}
+
+.variant-section-header p,
+.variant-form-heading p {
+  margin: 6px 0 0;
+  color: #615d59;
+  font-size: 13px;
+}
+
+.variant-add-button {
+  flex-shrink: 0;
+}
+
+.variant-form-panel {
+  overflow: hidden;
+  margin: 0 20px 20px;
+  background: #fbfbfb;
+  border: 1px solid #d8d6d3;
+  border-radius: 12px;
+}
+
+.variant-form-heading {
+  padding: 18px 20px 0;
+}
+
+.variant-form-panel .product-create-grid {
+  padding-top: 18px;
+}
+
+.variant-form-panel .product-create-footer {
+  background: #ffffff;
+}
+
+.variant-form-panel input[readonly] {
+  color: #615d59;
+  cursor: default;
+  background: #eeeeec;
+}
+
+.variant-field-help {
+  color: #77726d;
+  font-size: 11px;
+  line-height: 1.4;
+}
+
+.variant-table-wrapper {
+  border-top: 1px solid #e6e6e6;
+}
+
+.product-variant-table {
+  min-width: 720px;
+}
+
+.product-variant-table tr.is-editing {
+  background: #eef7ff;
+}
+
+.product-variant-table button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+@media (max-width: 760px) {
+  .variant-section-header {
+    align-items: stretch;
+    flex-direction: column;
+  }
+
+  .variant-add-button {
+    width: 100%;
+  }
+
+  .variant-form-panel {
+    margin: 0 12px 12px;
+  }
+}
+
+.variant-row-actions {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  white-space: nowrap;
+}
+
+.variant-deactivate-button,
+.variant-reactivate-button {
+  min-width: 72px;
+  height: 34px;
+  padding: 0 10px;
+  font: inherit;
+  font-size: 12px;
+  cursor: pointer;
+  background: #ffffff;
+  border-radius: 7px;
+}
+
+.variant-deactivate-button {
+  color: #8a2634;
+  border: 1px solid #e4b6bd;
+}
+
+.variant-reactivate-button {
+  color: #126624;
+  border: 1px solid #a9d9b2;
+}
+
+.variant-deactivate-button:disabled,
+.variant-reactivate-button:disabled {
+  cursor: not-allowed;
+  opacity: 0.5;
+}
+
+.variant-status {
+  display: inline-flex;
+  padding: 4px 8px;
+  font-size: 12px;
+  font-weight: 600;
+  border-radius: 9999px;
+}
+
+.variant-status.is-active {
+  color: #126624;
+  background: #e8f7eb;
+}
+
+.variant-status.is-inactive {
+  color: #615d59;
+  background: #eeeeec;
+}
+
+.product-variant-table tr.is-inactive td {
+  color: #77726d;
+  background: #fafafa;
+}

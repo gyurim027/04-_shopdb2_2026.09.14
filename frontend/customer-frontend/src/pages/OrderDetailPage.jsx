@@ -223,6 +223,9 @@ export default function OrderDetailPage() {
             <div className="paid-mark"><CheckCircle2 size={17} /> 결제 또는 주문 처리가 완료된 상태입니다.</div>
           )}
           <Link className="refund-guide-link" to="/refunds">환불이 필요하신가요? 환불 요청으로 이동</Link>
+          {['DELIVERED', 'COMPLETED'].includes(order.order_status) && (
+            <Link className="return-guide-link" to={`/returns?orderId=${order.order_id}`}>배송받은 상품을 돌려보내시나요? 반품 신청으로 이동</Link>
+          )}
         </section>
       </div>
     </div>

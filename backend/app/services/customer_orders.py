@@ -27,10 +27,7 @@ def _get_customer_address(
     address_id: int,
 ):
     """
-    주문에 사용할 배송지를 조회한다.
-
-    반드시 로그인한 사용자의 user_id와
-    address_id를 함께 검사한다.
+    주문에 사용할 고객 본인의 배송지를 조회한다.
     """
 
     address = db.execute(
@@ -70,10 +67,10 @@ def _get_order_product(
     variant_id: int,
 ):
     """
-    주문 상품과 SKU 정보를 조회한다.
+    주문할 상품과 상품 옵션(SKU)을 조회한다.
 
-    고객이 보내는 가격은 신뢰하지 않고
-    항상 DB의 상품 가격과 옵션 추가 금액을 사용한다.
+    프론트가 보내는 가격은 사용하지 않고
+    DB에 저장된 실제 상품 가격과 옵션 추가금액을 사용한다.
     """
 
     row = db.execute(
@@ -90,6 +87,7 @@ def _get_order_product(
                 pv.sku_code,
                 pv.additional_price,
                 pv.active_yn
+
             FROM products AS p
 
             INNER JOIN product_variants AS pv
@@ -130,7 +128,7 @@ def _normalize_order_items(
     order_in: CustomerOrderCreateRequest,
 ) -> list[dict]:
     """
-    같은 상품/옵션이 여러 번 들어온 경우
+    동일한 상품/옵션이 여러 번 들어오면
     하나의 주문 항목으로 합친다.
     """
 
@@ -171,13 +169,12 @@ def _find_fulfillment_org(
     prepared_items: list[dict],
 ) -> int:
     """
-    주문에 포함된 모든 상품을 한 번에 처리할 수 있는
-    조직(org_id)을 찾는다.
+    org_id가 없는 기존 바로구매용 로직.
 
-    orders 테이블은 하나의 org_id만 가지므로
-    모든 SKU 재고를 보유한 하나의 조직을 선택한다.
+    주문에 포함된 모든 상품을 처리할 수 있는
+    하나의 조직(org_id)을 자동으로 찾는다.
 
-    고객이 org_id를 직접 지정하지 않는다.
+    기존 주문 방식과의 호환성을 위해 유지한다.
     """
 
     candidate_org_ids: set[int] | None = None
@@ -220,7 +217,7 @@ def _find_fulfillment_org(
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
                 detail=(
-                    "현재 한 조직에서 주문 상품 전체의 "
+                    "현재 한 판매사에서 주문 상품 전체의 "
                     "재고를 확보할 수 없습니다."
                 ),
             )
@@ -234,17 +231,69 @@ def _find_fulfillment_org(
     return min(candidate_org_ids)
 
 
+def _validate_requested_org(
+    db: Session,
+    org_id: int,
+) -> int:
+    """
+    장바구니에서 전달받은 판매사 org_id를 검증한다.
+
+    조건:
+    - 존재하는 조직
+    - 활성 조직
+    - 해당 조직에 ACTIVE 판매자 계정 존재
+    - ACTIVE 판매자 프로필 존재
+    """
+
+    row = db.execute(
+        text(
+            """
+            SELECT
+                ou.org_id
+            FROM org_units AS ou
+
+            WHERE ou.org_id = :org_id
+              AND ou.active_yn = 'Y'
+
+              AND EXISTS (
+                    SELECT 1
+
+                    FROM users AS u
+
+                    INNER JOIN seller_profiles AS sp
+                        ON sp.user_id = u.user_id
+
+                    WHERE u.org_id = ou.org_id
+                      AND u.user_status = 'ACTIVE'
+                      AND sp.seller_status = 'ACTIVE'
+                )
+            """
+        ),
+        {
+            "org_id": org_id,
+        },
+    ).mappings().first()
+
+    if row is None:
+        raise HTTPException(
+            status_code=status.HTTP_409_CONFLICT,
+            detail="현재 주문에 사용할 수 없는 판매사입니다.",
+        )
+
+    return int(row["org_id"])
+
+
 def _lock_and_check_inventory(
     db: Session,
     org_id: int,
     prepared_items: list[dict],
 ) -> None:
     """
-    주문 생성 직전에 재고 행을 잠그고
-    재고를 다시 확인한다.
+    주문 생성 직전에 해당 판매사의 재고를 잠그고
+    구매 가능한 수량이 충분한지 다시 확인한다.
 
-    동시에 여러 고객이 같은 상품을 주문하는 경우
-    재고 초과 주문을 줄이기 위한 처리다.
+    장바구니에서 재고를 예약하지 않기 때문에
+    실제 주문 시점에 반드시 다시 검사한다.
     """
 
     for item in prepared_items:
@@ -255,9 +304,12 @@ def _lock_and_check_inventory(
                     inventory_id,
                     stock_quantity,
                     reserved_quantity
+
                 FROM inventories
+
                 WHERE org_id = :org_id
                   AND variant_id = :variant_id
+
                 FOR UPDATE
                 """
             ),
@@ -270,7 +322,10 @@ def _lock_and_check_inventory(
         if inventory is None:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="주문 처리 중 재고 정보를 찾을 수 없습니다.",
+                detail=(
+                    "선택한 판매사에 해당 상품의 "
+                    "재고 정보가 없습니다."
+                ),
             )
 
         available_quantity = (
@@ -281,7 +336,9 @@ def _lock_and_check_inventory(
         if available_quantity < item["quantity"]:
             raise HTTPException(
                 status_code=status.HTTP_409_CONFLICT,
-                detail="주문 처리 중 상품 재고가 부족해졌습니다.",
+                detail=(
+                    "선택한 판매사의 상품 재고가 부족합니다."
+                ),
             )
 
 
@@ -291,8 +348,10 @@ def _reserve_inventory(
     prepared_items: list[dict],
 ) -> None:
     """
-    결제 대기 주문의 수량만큼
+    주문이 생성되면 주문 수량만큼
     inventories.reserved_quantity를 증가시킨다.
+
+    실제 stock_quantity 차감은 결제 승인 단계에서 처리한다.
     """
 
     for item in prepared_items:
@@ -318,8 +377,10 @@ def _reserve_inventory(
 
 def _generate_order_no() -> str:
     """
+    주문번호 생성.
+
     예:
-    ORD-20260915-A1B2C3D4
+    ORD-20260918-A1B2C3D4
     """
 
     date_part = datetime.now().strftime(
@@ -345,18 +406,24 @@ def create_customer_order(
     """
     고객 주문 생성.
 
-    장바구니 기능은 사용하지 않는다.
+    org_id가 있는 경우:
+    - 장바구니에서 선택한 판매사로 주문
+    - 해당 판매사의 재고만 사용
+
+    org_id가 없는 경우:
+    - 기존 바로구매 방식
+    - 백엔드가 주문 가능한 판매사를 자동 선택
 
     처리 순서:
-    1. 본인 배송지 확인
+    1. 고객 배송지 확인
     2. 상품/SKU 확인
-    3. DB 가격으로 주문 금액 계산
-    4. 전체 상품을 처리할 org_id 결정
-    5. 재고 잠금 및 재확인
+    3. DB 가격으로 주문금액 계산
+    4. 판매사(org_id) 결정
+    5. 해당 판매사 재고 잠금 및 확인
     6. orders 생성
     7. order_items 생성
     8. reserved_quantity 증가
-    9. 결제 대기 상태로 주문 생성
+    9. PAYMENT_PENDING 상태로 주문 생성
     """
 
     address = _get_customer_address(
@@ -425,10 +492,19 @@ def create_customer_order(
             }
         )
 
-    org_id = _find_fulfillment_org(
-        db=db,
-        prepared_items=prepared_items,
-    )
+    # 장바구니 주문이면 프론트가 선택한 판매사를 사용한다.
+    if order_in.org_id is not None:
+        org_id = _validate_requested_org(
+            db=db,
+            org_id=order_in.org_id,
+        )
+
+    # 기존 바로구매는 기존 방식대로 판매사를 자동 선택한다.
+    else:
+        org_id = _find_fulfillment_org(
+            db=db,
+            prepared_items=prepared_items,
+        )
 
     discount_amount = (
         DEFAULT_DISCOUNT_AMOUNT
@@ -569,6 +645,7 @@ def create_customer_order(
                 ),
                 {
                     "order_id": order_id,
+
                     "product_id": item[
                         "product_id"
                     ],
@@ -616,7 +693,9 @@ def create_customer_order(
             status_code=(
                 status.HTTP_500_INTERNAL_SERVER_ERROR
             ),
-            detail="주문 생성 중 데이터베이스 오류가 발생했습니다.",
+            detail=(
+                "주문 생성 중 데이터베이스 오류가 발생했습니다."
+            ),
         ) from exc
 
     return get_customer_order_detail(
@@ -633,10 +712,7 @@ def get_customer_orders(
     size: int = 20,
 ) -> CustomerOrderListResponse:
     """
-    로그인한 고객의 주문 목록 조회.
-
-    반드시 buyer_user_id가 현재 사용자와
-    일치하는 주문만 반환한다.
+    로그인한 고객의 주문 목록을 조회한다.
     """
 
     total = db.execute(
@@ -691,8 +767,12 @@ def get_customer_orders(
 
     items = [
         CustomerOrderListItemResponse(
-            order_id=row["order_id"],
-            order_no=row["order_no"],
+            order_id=row[
+                "order_id"
+            ],
+            order_no=row[
+                "order_no"
+            ],
             order_status=row[
                 "order_status"
             ],
@@ -734,10 +814,10 @@ def get_customer_order_detail(
     order_id: int,
 ) -> CustomerOrderDetailResponse:
     """
-    로그인한 고객의 주문 상세 조회.
+    로그인한 고객의 주문 상세를 조회한다.
 
-    order_id뿐 아니라 buyer_user_id도 확인해서
-    다른 고객의 주문은 조회할 수 없다.
+    buyer_user_id까지 함께 확인해서
+    본인의 주문만 조회할 수 있다.
     """
 
     order = db.execute(
@@ -815,6 +895,7 @@ def get_customer_order_detail(
             order_item_id=row[
                 "order_item_id"
             ],
+
             product_id=row[
                 "product_id"
             ],
@@ -832,12 +913,14 @@ def get_customer_order_detail(
             quantity=row[
                 "quantity"
             ],
+
             unit_price=row[
                 "unit_price"
             ],
             item_amount=row[
                 "item_amount"
             ],
+
             item_status=row[
                 "item_status"
             ],
@@ -846,13 +929,19 @@ def get_customer_order_detail(
     ]
 
     return CustomerOrderDetailResponse(
-        order_id=order["order_id"],
-        order_no=order["order_no"],
+        order_id=order[
+            "order_id"
+        ],
+        order_no=order[
+            "order_no"
+        ],
 
         buyer_user_id=order[
             "buyer_user_id"
         ],
-        org_id=order["org_id"],
+        org_id=order[
+            "org_id"
+        ],
 
         order_status=order[
             "order_status"
@@ -877,7 +966,9 @@ def get_customer_order_detail(
         receiver_phone=order[
             "receiver_phone"
         ],
-        zipcode=order["zipcode"],
+        zipcode=order[
+            "zipcode"
+        ],
 
         shipping_address1=order[
             "shipping_address1"
@@ -903,7 +994,7 @@ def get_customer_order_status(
     order_id: int,
 ) -> CustomerOrderStatusResponse:
     """
-    로그인한 고객의 주문 상태만 간단히 조회.
+    로그인한 고객의 주문 상태를 조회한다.
     """
 
     order = db.execute(
@@ -935,8 +1026,12 @@ def get_customer_order_status(
         )
 
     return CustomerOrderStatusResponse(
-        order_id=order["order_id"],
-        order_no=order["order_no"],
+        order_id=order[
+            "order_id"
+        ],
+        order_no=order[
+            "order_no"
+        ],
         order_status=order[
             "order_status"
         ],

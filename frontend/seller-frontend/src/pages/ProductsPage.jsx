@@ -1,6 +1,7 @@
 import { useEffect, useMemo, useState } from 'react'
 
 import ProductEditModal from '../components/ProductEditModal'
+import ProductVariantModal from '../components/ProductVariantModal'
 import {
   createSellerProduct,
   getSellerCategories,
@@ -57,6 +58,8 @@ function ProductsPage() {
 
   // 현재 수정할 상품을 저장합니다.
   const [editingProduct, setEditingProduct] = useState(null)
+  // 옵션/SKU를 관리할 상품을 저장합니다.
+  const [variantProduct, setVariantProduct] = useState(null)
 
   const [refreshKey, setRefreshKey] = useState(0)
   const [isLoading, setIsLoading] = useState(true)
@@ -442,12 +445,20 @@ function ProductsPage() {
       )}
 
       {/* 수정 버튼을 누르면 선택한 상품의 수정 팝업을 엽니다. */}
+
       {editingProduct && (
         <ProductEditModal
           product={editingProduct}
           categories={categories}
           onClose={() => setEditingProduct(null)}
           onUpdated={handleProductUpdated}
+        />
+      )}
+
+      {variantProduct && (
+        <ProductVariantModal
+          product={variantProduct}
+          onClose={() => setVariantProduct(null)}
         />
       )}
 
@@ -566,16 +577,29 @@ function ProductsPage() {
                     <td>{formatDate(product.created_at)}</td>
 
                     <td>
-                      <button
-                        className="product-edit-button"
-                        type="button"
-                        onClick={() => {
-                          setSuccessMessage('')
-                          setEditingProduct(product)
-                        }}
-                      >
-                        수정
-                      </button>
+                      <div className="product-action-buttons">
+                        <button
+                          className="product-edit-button"
+                          type="button"
+                          onClick={() => {
+                            setSuccessMessage('')
+                            setEditingProduct(product)
+                          }}
+                        >
+                          수정
+                        </button>
+
+                        <button
+                          className="product-edit-button"
+                          type="button"
+                          onClick={() => {
+                            setSuccessMessage('')
+                            setVariantProduct(product)
+                          }}
+                        >
+                          옵션 관리
+                        </button>
+                      </div>
                     </td>
                   </tr>
                 ))}
