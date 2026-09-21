@@ -1,11 +1,15 @@
+from pathlib import Path
+
 from fastapi import HTTPException, status
 from sqlalchemy import or_, text
 from sqlalchemy.orm import Session
 
+from app.models.files import FileAsset
 from app.models.products import (
     Category,
     Inventory,
     Product,
+    ProductImage,
     ProductVariant,
 )
 from app.schemas.customer_products import (
@@ -23,6 +27,14 @@ CUSTOMER_VISIBLE_PRODUCT_STATUSES = (
     "SALE",
     "SOLD_OUT",
 )
+
+
+def _customer_asset_content_url(file_id: int) -> str:
+    """
+    고객 화면에서 사용할 상품 이미지 조회 URL.
+    """
+
+    return f"/api/customer/products/assets/{file_id}/content"
 
 
 def get_customer_categories(
@@ -67,20 +79,31 @@ def _get_main_image_url(
     2. THUMBNAIL
     3. DETAIL
     4. OPTION
+
+    기존 public_url 또는 thumbnail_url이 있으면 그대로 사용한다.
+
+    셀러가 직접 업로드한 LOCAL 이미지처럼
+    public_url이 없는 경우에는 고객용 이미지 조회 API 주소를 사용한다.
     """
 
     row = db.execute(
         text(
             """
             SELECT
+                pi.file_id,
                 fa.public_url,
-                fa.thumbnail_url
+                fa.thumbnail_url,
+                fa.storage_type,
+                fa.storage_path
             FROM product_images AS pi
+
             INNER JOIN file_assets AS fa
                 ON fa.file_id = pi.file_id
+
             WHERE pi.product_id = :product_id
               AND pi.active_yn = 'Y'
               AND fa.active_yn = 'Y'
+
             ORDER BY
                 CASE pi.image_type
                     WHEN 'MAIN' THEN 1
@@ -91,6 +114,7 @@ def _get_main_image_url(
                 END,
                 pi.display_order,
                 pi.product_image_id
+
             LIMIT 1
             """
         ),
@@ -102,10 +126,21 @@ def _get_main_image_url(
     if row is None:
         return None
 
-    return (
-        row["public_url"]
-        or row["thumbnail_url"]
-    )
+    if row["public_url"]:
+        return row["public_url"]
+
+    if row["thumbnail_url"]:
+        return row["thumbnail_url"]
+
+    if (
+        row["storage_type"] == "LOCAL"
+        and row["storage_path"]
+    ):
+        return _customer_asset_content_url(
+            row["file_id"]
+        )
+
+    return None
 
 
 def get_customer_products(
@@ -118,7 +153,7 @@ def get_customer_products(
     """
     고객 상품 목록 / 검색.
 
-    고객 화면에서는:
+    고객 화면에서는
     - SALE
     - SOLD_OUT
 
@@ -132,7 +167,8 @@ def get_customer_products(
         )
         .join(
             Category,
-            Product.category_id == Category.category_id,
+            Product.category_id
+            == Category.category_id,
         )
         .filter(
             Product.product_status.in_(
@@ -217,7 +253,15 @@ def _get_product_images(
     product_id: int,
 ) -> list[CustomerProductImageResponse]:
     """
-    상품 상세 페이지 이미지 목록을 조회한다.
+    상품 상세 페이지에서 사용할 이미지 목록을 조회한다.
+
+    활성 상태의 product_images / file_assets만 사용한다.
+
+    셀러가 LOCAL로 업로드한 이미지인 경우에는
+    고객 전용 이미지 조회 주소를 content_url에 넣는다.
+
+    DETAIL 이미지는 프론트에서 display_order 순서대로
+    세로 배치하여 상품 상세 영역에 사용할 수 있다.
     """
 
     rows = db.execute(
@@ -229,14 +273,21 @@ def _get_product_images(
                 pi.image_type,
                 pi.alt_text,
                 pi.display_order,
+
                 fa.public_url,
-                fa.thumbnail_url
+                fa.thumbnail_url,
+                fa.storage_type,
+                fa.storage_path
+
             FROM product_images AS pi
+
             INNER JOIN file_assets AS fa
                 ON fa.file_id = pi.file_id
+
             WHERE pi.product_id = :product_id
               AND pi.active_yn = 'Y'
               AND fa.active_yn = 'Y'
+
             ORDER BY
                 pi.display_order,
                 pi.product_image_id
@@ -258,9 +309,109 @@ def _get_product_images(
             display_order=row["display_order"],
             public_url=row["public_url"],
             thumbnail_url=row["thumbnail_url"],
+            content_url=(
+                _customer_asset_content_url(
+                    row["file_id"]
+                )
+                if (
+                    row["storage_type"] == "LOCAL"
+                    and row["storage_path"]
+                )
+                else None
+            ),
         )
         for row in rows
     ]
+
+
+def get_customer_product_asset_content(
+    db: Session,
+    file_id: int,
+) -> tuple[FileAsset, Path]:
+    """
+    고객 상품 화면에서 접근할 수 있는 상품 이미지를 반환한다.
+
+    아무 file_assets 파일이나 공개하지 않는다.
+
+    다음 조건을 모두 확인한다.
+
+    1. file_assets가 존재해야 한다.
+    2. file_assets.active_yn = 'Y'
+    3. file_assets.file_type = 'IMAGE'
+    4. product_images에 실제 상품 이미지로 연결되어 있어야 한다.
+    5. product_images.active_yn = 'Y'
+    6. 연결된 상품 상태가 SALE 또는 SOLD_OUT이어야 한다.
+    7. LOCAL 저장 파일이어야 한다.
+    8. uploads 디렉터리 내부의 실제 파일이어야 한다.
+    """
+
+    asset = db.get(
+        FileAsset,
+        file_id,
+    )
+
+    if (
+        asset is None
+        or asset.active_yn != "Y"
+        or asset.file_type != "IMAGE"
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="이미지를 찾을 수 없습니다.",
+        )
+
+    image_link = (
+        db.query(ProductImage)
+        .join(
+            Product,
+            Product.product_id
+            == ProductImage.product_id,
+        )
+        .filter(
+            ProductImage.file_id == file_id,
+            ProductImage.active_yn == "Y",
+            Product.product_status.in_(
+                CUSTOMER_VISIBLE_PRODUCT_STATUSES
+            ),
+        )
+        .first()
+    )
+
+    if image_link is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="이미지를 찾을 수 없습니다.",
+        )
+
+    if (
+        asset.storage_type != "LOCAL"
+        or not asset.storage_path
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="서버에 저장된 이미지를 찾을 수 없습니다.",
+        )
+
+    file_path = Path(
+        asset.storage_path
+    ).resolve()
+
+    uploads_root = Path(
+        "uploads"
+    ).resolve()
+
+    if (
+        not file_path.is_relative_to(
+            uploads_root
+        )
+        or not file_path.is_file()
+    ):
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND,
+            detail="서버에 저장된 이미지를 찾을 수 없습니다.",
+        )
+
+    return asset, file_path
 
 
 def _get_available_quantity_by_variant(
@@ -273,7 +424,7 @@ def _get_available_quantity_by_variant(
     구매 가능 재고:
     stock_quantity - reserved_quantity
 
-    기존 상품 상세 API와 호환성을 유지하기 위해
+    기존 상품 상세 API와의 호환성을 유지하기 위해
     모든 조직의 구매 가능 재고를 합산한 값을
     available_quantity로 반환한다.
     """
@@ -323,7 +474,7 @@ def _get_variant_sellers(
     """
     특정 상품 옵션을 판매하는 판매사 목록을 조회한다.
 
-    inventories의:
+    inventories의
     - org_id
     - variant_id
 
@@ -342,19 +493,29 @@ def _get_variant_sellers(
                 ou.org_name,
 
                 (
-                    SELECT sp.company_name
+                    SELECT
+                        sp.company_name
+
                     FROM seller_profiles AS sp
 
                     INNER JOIN users AS seller_user
-                        ON seller_user.user_id = sp.user_id
+                        ON seller_user.user_id
+                           = sp.user_id
 
-                    WHERE seller_user.org_id = i.org_id
-                      AND seller_user.user_status = 'ACTIVE'
-                      AND sp.seller_status = 'ACTIVE'
+                    WHERE seller_user.org_id
+                          = i.org_id
 
-                    ORDER BY sp.seller_id
+                      AND seller_user.user_status
+                          = 'ACTIVE'
+
+                      AND sp.seller_status
+                          = 'ACTIVE'
+
+                    ORDER BY
+                        sp.seller_id
 
                     LIMIT 1
+
                 ) AS seller_name,
 
                 SUM(
@@ -384,8 +545,10 @@ def _get_variant_sellers(
 
                     WHERE active_seller_user.org_id
                           = i.org_id
+
                       AND active_seller_user.user_status
                           = 'ACTIVE'
+
                       AND active_sp.seller_status
                           = 'ACTIVE'
                 )
@@ -428,7 +591,7 @@ def _get_product_variants(
     - 전체 구매 가능 재고
     - 판매사별 구매 가능 재고
 
-    를 함께 반환한다.
+    정보를 함께 반환한다.
     """
 
     variants = (
@@ -460,10 +623,18 @@ def _get_product_variants(
         CustomerProductVariantResponse(
             variant_id=variant.variant_id,
             sku_code=variant.sku_code,
-            option_name1=variant.option_name1,
-            option_value1=variant.option_value1,
-            option_name2=variant.option_name2,
-            option_value2=variant.option_value2,
+            option_name1=(
+                variant.option_name1
+            ),
+            option_value1=(
+                variant.option_value1
+            ),
+            option_name2=(
+                variant.option_name2
+            ),
+            option_value2=(
+                variant.option_value2
+            ),
             additional_price=(
                 variant.additional_price
             ),
@@ -489,13 +660,17 @@ def get_customer_product_detail(
     """
     고객 상품 상세 조회.
 
-    함께 반환:
+    함께 반환하는 정보:
     - 상품 기본 정보
     - 카테고리
+    - 상품 상세 설명
     - 상품 이미지
     - SKU 옵션
     - 옵션별 전체 구매 가능 재고
     - 옵션별 판매사 및 판매사별 구매 가능 재고
+
+    상품 이미지는 MAIN / DETAIL 등의 image_type을
+    그대로 내려주므로 프론트에서 용도별로 구분할 수 있다.
     """
 
     row = (

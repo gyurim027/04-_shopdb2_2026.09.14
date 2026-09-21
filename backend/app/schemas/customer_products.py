@@ -15,7 +15,7 @@ class CustomerCategoryResponse(BaseModel):
 
 
 class CustomerProductImageResponse(BaseModel):
-    """고객 화면에 노출하는 상품 이미지"""
+    """고객 화면에 노출되는 상품 이미지"""
 
     product_image_id: int
     file_id: int
@@ -25,6 +25,10 @@ class CustomerProductImageResponse(BaseModel):
 
     public_url: str | None = None
     thumbnail_url: str | None = None
+
+    # 셀러가 서버에 업로드한 LOCAL 이미지를
+    # 고객 프론트에서 조회하기 위한 고객 전용 URL
+    content_url: str | None = None
 
 
 class CustomerProductSellerResponse(BaseModel):
