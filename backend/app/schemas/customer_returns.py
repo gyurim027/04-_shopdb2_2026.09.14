@@ -23,15 +23,10 @@ class CustomerReturnCreateRequest(BaseModel):
     """
     고객 반품 신청.
 
-    고객이 직접 입력하는 값:
-    - 주문 ID
-    - 반품 사유 코드
-    - 반품 사유 상세
-    - 회수 방식
-    - 반품할 주문상품과 수량
+    한 번의 요청에서 여러 판매사의 상품을 선택할 수 있다.
 
-    반품 상태, 검수 결과, 환불 요청 ID 등은
-    백엔드 또는 관리자가 처리한다.
+    백엔드는 선택된 주문상품의 판매자를 확인한 뒤
+    판매사별로 return_requests를 각각 생성한다.
     """
 
     order_id: int = Field(
@@ -64,11 +59,8 @@ class CustomerReturnCreateRequest(BaseModel):
 
 
 class CustomerReturnItemResponse(BaseModel):
-    """
-    고객 반품상품 응답.
-    """
-
     return_item_id: int
+
     order_item_id: int
 
     product_id: int
@@ -82,14 +74,11 @@ class CustomerReturnItemResponse(BaseModel):
 
     item_condition: str | None = None
     inspection_result: str
+
     inspection_note: str | None = None
 
 
 class CustomerReturnResponse(BaseModel):
-    """
-    고객 반품 요청 상세 응답.
-    """
-
     return_request_id: int
 
     order_id: int
@@ -117,11 +106,31 @@ class CustomerReturnResponse(BaseModel):
     )
 
 
-class CustomerReturnListItemResponse(BaseModel):
+class CustomerReturnCreateResponse(BaseModel):
     """
-    고객 반품 요청 목록 한 건.
+    고객 반품 신청 생성 결과.
+
+    한 번의 반품 신청이라도 판매사가 여러 명이면
+    판매사별로 여러 return_request가 생성될 수 있다.
+
+    예:
+    고객이 판매사 A 상품 + 판매사 B 상품을 함께 신청
+
+    → return_request 1
+       판매사 A 상품
+
+    → return_request 2
+       판매사 B 상품
     """
 
+    requests: list[CustomerReturnResponse] = Field(
+        default_factory=list,
+    )
+
+    total: int
+
+
+class CustomerReturnListItemResponse(BaseModel):
     return_request_id: int
 
     order_id: int
@@ -143,10 +152,6 @@ class CustomerReturnListItemResponse(BaseModel):
 
 
 class CustomerReturnListResponse(BaseModel):
-    """
-    고객 반품 요청 목록 응답.
-    """
-
     items: list[CustomerReturnListItemResponse] = Field(
         default_factory=list,
     )
@@ -157,18 +162,14 @@ class CustomerReturnListResponse(BaseModel):
 
 
 class CustomerReturnStatusResponse(BaseModel):
-    """
-    고객 반품 처리 상태 조회.
-    """
-
     return_request_id: int
 
     order_id: int
     order_no: str
 
     return_status: str
-
     pickup_method: str
+
     carrier_name: str | None = None
     tracking_no: str | None = None
 

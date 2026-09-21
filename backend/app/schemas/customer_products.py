@@ -15,7 +15,7 @@ class CustomerCategoryResponse(BaseModel):
 
 
 class CustomerProductImageResponse(BaseModel):
-    """고객 화면에 노출할 상품 이미지"""
+    """고객 화면에 노출하는 상품 이미지"""
 
     product_image_id: int
     file_id: int
@@ -23,13 +23,39 @@ class CustomerProductImageResponse(BaseModel):
     alt_text: str | None = None
     display_order: int
 
-    # file_assets에서 조회
     public_url: str | None = None
     thumbnail_url: str | None = None
 
 
+class CustomerProductSellerResponse(BaseModel):
+    """
+    특정 상품 옵션을 판매하는 판매사 정보.
+
+    org_id:
+    장바구니에 상품을 담을 때 함께 전달한다.
+
+    available_quantity:
+    해당 판매사의 해당 옵션 구매 가능 재고.
+    """
+
+    org_id: int
+    org_name: str
+
+    seller_name: str | None = None
+
+    available_quantity: int = 0
+
+
 class CustomerProductVariantResponse(BaseModel):
-    """고객이 선택할 수 있는 상품 옵션(SKU)"""
+    """
+    고객이 선택할 수 있는 상품 옵션(SKU).
+
+    available_quantity:
+    모든 판매사의 구매 가능 재고 합계.
+
+    sellers:
+    해당 옵션을 판매하는 판매사별 정보.
+    """
 
     variant_id: int
     sku_code: str
@@ -42,8 +68,11 @@ class CustomerProductVariantResponse(BaseModel):
 
     additional_price: Decimal
 
-    # inventories에서 계산한 구매 가능 수량
     available_quantity: int = 0
+
+    sellers: list[CustomerProductSellerResponse] = Field(
+        default_factory=list,
+    )
 
 
 class CustomerProductListItem(BaseModel):
@@ -63,7 +92,6 @@ class CustomerProductListItem(BaseModel):
 
     product_status: str
 
-    # 대표 이미지
     main_image_url: str | None = None
 
 
@@ -71,7 +99,7 @@ class CustomerProductListResponse(BaseModel):
     """고객 상품 목록 / 검색 응답"""
 
     items: list[CustomerProductListItem] = Field(
-        default_factory=list
+        default_factory=list,
     )
 
     total: int
@@ -102,9 +130,9 @@ class CustomerProductDetailResponse(BaseModel):
     updated_at: datetime
 
     images: list[CustomerProductImageResponse] = Field(
-        default_factory=list
+        default_factory=list,
     )
 
     variants: list[CustomerProductVariantResponse] = Field(
-        default_factory=list
+        default_factory=list,
     )

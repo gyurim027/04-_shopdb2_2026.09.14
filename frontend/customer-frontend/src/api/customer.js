@@ -16,6 +16,12 @@ export const customerApi = {
   },
   getProduct: (id) => apiRequest(`/customer/products/${id}`),
 
+  getCart: () => apiRequest('/customer/cart'),
+  addCartItem: (body) => apiRequest('/customer/cart/items', { method: 'POST', body: JSON.stringify(body) }),
+  updateCartItemQuantity: (cartItemId, body) => apiRequest(`/customer/cart/items/${cartItemId}`, { method: 'PATCH', body: JSON.stringify(body) }),
+  updateCartItemSelected: (cartItemId, body) => apiRequest(`/customer/cart/items/${cartItemId}/selected`, { method: 'PATCH', body: JSON.stringify(body) }),
+  deleteCartItem: (cartItemId) => apiRequest(`/customer/cart/items/${cartItemId}`, { method: 'DELETE' }),
+
   getAddresses: () => apiRequest('/customer/addresses'),
   createAddress: (body) => apiRequest('/customer/addresses', { method: 'POST', body: JSON.stringify(body) }),
   updateAddress: (id, body) => apiRequest(`/customer/addresses/${id}`, { method: 'PATCH', body: JSON.stringify(body) }),
@@ -35,6 +41,11 @@ export const customerApi = {
   createRefund: (body) => apiRequest('/customer/refunds', { method: 'POST', body: JSON.stringify(body) }),
   getRefunds: ({ page = 1, size = 20 } = {}) => apiRequest(`/customer/refunds?page=${page}&size=${size}`),
   getRefund: (id) => apiRequest(`/customer/refunds/${id}`),
+
+  createReturn: (body) => apiRequest('/customer/returns', { method: 'POST', body: JSON.stringify(body) }),
+  getReturns: ({ page = 1, size = 20 } = {}) => apiRequest(`/customer/returns?page=${page}&size=${size}`),
+  getReturn: (id) => apiRequest(`/customer/returns/${id}`),
+  getReturnStatus: (id) => apiRequest(`/customer/returns/${id}/status`),
 
   createInquiry: (body) => apiRequest('/customer/support/inquiries', { method: 'POST', body: JSON.stringify(body) }),
   getInquiries: ({ page = 1, size = 20, status, category } = {}) => {
