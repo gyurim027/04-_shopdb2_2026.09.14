@@ -105,3 +105,54 @@ def get_refund_summary(db: Session, auth: AuthContext) -> dict:
         "pending_refund_count": int(row.pending_refund_count),
         "pending_refund_amount": row.pending_refund_amount,
     }
+
+def get_return_summary(
+    db: Session,
+    auth: AuthContext,
+) -> dict:
+    """현재 판매자가 처리해야 하는 반품 요청 건수를 계산한다."""
+
+    row = db.execute(
+        text(
+            """
+            SELECT
+                COUNT(
+                    DISTINCT rr.return_request_id
+                ) AS pending_return_count
+
+            FROM return_requests AS rr
+
+            INNER JOIN return_items AS ri
+                ON ri.return_request_id =
+                   rr.return_request_id
+
+            INNER JOIN order_items AS oi
+                ON oi.order_item_id =
+                   ri.order_item_id
+
+            INNER JOIN products AS p
+                ON p.product_id = oi.product_id
+
+            WHERE p.seller_user_id =
+                  :seller_user_id
+
+              AND rr.return_status IN (
+                    'REQUESTED',
+                    'PICKUP_REQUESTED',
+                    'PICKED_UP',
+                    'RECEIVED',
+                    'INSPECTING'
+              )
+            """
+        ),
+        {
+            # JWT에서 확인한 현재 판매자의 user_id를 SQL에 전달한다.
+            "seller_user_id": auth.user_id,
+        },
+    ).first()
+
+    return {
+        "pending_return_count": int(
+            row.pending_return_count or 0
+        ),
+    }
