@@ -49,9 +49,6 @@ def get_scoped_org_ids(db: Session, auth: AuthContext) -> list[int] | None:
 
 
 # --- Refund policies -----------------------------------------------------
-# 04_관리자권한매트릭스: refund_policies는 org_id 직접 스코프.
-# 최고관리자 CRUD, 지점장은 조회만(자기 org 소속 + 전사 공통(org_id NULL) 정책).
-
 
 def list_refund_policies(db: Session, auth: AuthContext) -> list[RefundPolicy]:
     """환불 정책 목록 조회: 최고관리자는 전체, 지점장은 본사 공통(org_id IS NULL 또는 1) 및 자기 조직 정책 조회."""
@@ -59,7 +56,6 @@ def list_refund_policies(db: Session, auth: AuthContext) -> list[RefundPolicy]:
     scoped_org_ids = get_scoped_org_ids(db, auth)
     
     if scoped_org_ids is not None:
-        # 본사(org_id=1 또는 NULL)와 지점장 소속 조직 ID를 모두 포함
         allowed_orgs = set(scoped_org_ids) | {1, None}
         query = query.filter(
             (RefundPolicy.org_id.in_(allowed_orgs)) | (RefundPolicy.org_id.is_(None))
@@ -114,9 +110,6 @@ def deactivate_refund_policy(
 
 
 # --- Refund requests -------------------------------------------------------
-# 04_관리자권한매트릭스: refund_requests는 order_id -> orders.org_id로 간접 스코프.
-# 최고관리자 R U(전체), 지점장 R U(자기 org 주문 건만). 신청(C)은 대고객 화면 몫.
-
 
 def _get_order_org(db: Session, order_id: int) -> int | None:
     return db.execute(
@@ -193,16 +186,109 @@ def reject_refund_request(
 
 
 # --- Refund items ------------------------------------------------------
-# refund_requests 신청 시 함께 생성되므로 조회만 제공한다.
-
 
 def list_refund_items(
     db: Session, refund_request_id: int, auth: AuthContext
 ) -> list[RefundItem]:
-    get_refund_request(db, refund_request_id, auth)  # 존재 + 스코프 확인
+    get_refund_request(db, refund_request_id, auth)
     return list(
         db.query(RefundItem)
         .filter(RefundItem.refund_request_id == refund_request_id)
         .order_by(RefundItem.refund_item_id)
         .all()
     )
+
+
+# --- Exchange requests -----------------------------------------------------
+
+def _assert_exchange_request_in_scope(
+    db: Session, exchange_request, auth: AuthContext
+) -> None:
+    scoped = get_scoped_org_ids(db, auth)
+    if scoped is None:
+        return
+    order_org = _get_order_org(db, exchange_request.order_id)
+    if order_org not in scoped:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="담당 조직의 주문 건이 아닙니다.",
+        )
+
+
+def list_exchange_requests(
+    db: Session, auth: AuthContext, exchange_status: str | None = None
+) -> list:
+    """교환 요청 목록을 주문 및 회원 정보와 조인하여 프론트엔드 형식에 맞게 조회"""
+    scoped = get_scoped_org_ids(db, auth)
+    
+    sql = """
+        SELECT 
+            rr.return_request_id,
+            rr.order_id,
+            o.buyer_user_id,
+            rr.return_reason_code,
+            rr.return_reason_detail,
+            rr.return_status
+        FROM return_requests rr
+        JOIN orders o ON rr.order_id = o.order_id
+        JOIN users u ON o.buyer_user_id = u.user_id
+        WHERE 1=1
+    """
+    params = {}
+    
+    if auth.org_id != 1 and scoped is not None and len(scoped) > 0:
+        sql += " AND o.org_id IN :org_ids"
+        params["org_ids"] = tuple(scoped)
+        
+    if exchange_status is not None:
+        sql += " AND rr.return_status = :exchange_status"
+        params["exchange_status"] = exchange_status
+        
+    sql += " ORDER BY rr.return_request_id DESC"
+    
+    rows = db.execute(text(sql), params).mappings().all()
+    
+    return [
+        {
+            "exchange_request_id": row["return_request_id"],
+            "order_id": row["order_id"],
+            "buyer_user_id": row["buyer_user_id"],
+            "exchange_reason": f"[{row['return_reason_code']}] {row['return_reason_detail'] or ''}",
+            "exchange_status": row["return_status"],
+        }
+        for row in rows
+    ]
+
+
+def get_exchange_request(
+    db: Session, exchange_request_id: int, auth: AuthContext
+):
+    from app.models.refunds import ReturnRequest
+
+    return_request = db.get(ReturnRequest, exchange_request_id)
+    if return_request is None:
+        raise HTTPException(
+            status_code=status.HTTP_404_NOT_FOUND, detail="교환 요청을 찾을 수 없습니다."
+        )
+    _assert_exchange_request_in_scope(db, return_request, auth)
+    return return_request
+
+
+def approve_exchange_request(
+    db: Session, exchange_request_id: int, auth: AuthContext
+):
+    exchange_request = get_exchange_request(db, exchange_request_id, auth)
+    exchange_request.return_status = "APPROVED"  # exchange_status -> return_status 로 수정
+    db.commit()
+    db.refresh(exchange_request)
+    return exchange_request
+
+
+def reject_exchange_request(
+    db: Session, exchange_request_id: int, auth: AuthContext
+):
+    exchange_request = get_exchange_request(db, exchange_request_id, auth)
+    exchange_request.return_status = "REJECTED"  # exchange_status -> return_status 로 수정
+    db.commit()
+    db.refresh(exchange_request)
+    return exchange_request

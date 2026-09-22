@@ -34,3 +34,19 @@ export const createProductVariant = (productId, data) => adminClient.post(`/prod
 // 고객 문의 관련
 export const fetchInquiries = () => adminClient.get('/inquiries');
 export const answerInquiry = (id, data) => adminClient.post(`/support/inquiries/${id}/answer`, data);
+
+// 교환 승인 API 호출
+export const approveExchangeRequest = async (exchangeId) => {
+  const response = await adminClient.patch(`/exchanges/${exchangeId}/approve`);
+  return response.data;
+};
+
+// 교환 반려 API 호출
+export const rejectExchangeRequest = async (exchangeId) => {
+  const response = await adminClient.patch(`/exchanges/${exchangeId}/reject`);
+  return response.data;
+};
+
+// 교환 요청 목록 조회 API 호출
+export const fetchExchangeRequests = (status) => 
+  adminClient.get('/exchanges', { params: { exchange_status: status } });
