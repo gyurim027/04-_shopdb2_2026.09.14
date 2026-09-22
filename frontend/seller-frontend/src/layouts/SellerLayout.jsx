@@ -1,6 +1,8 @@
+import { useEffect, useState } from 'react'
 import { NavLink, Outlet, useNavigate } from 'react-router-dom'
 
 import { removeAccessToken } from '../services/authStorage'
+import { getSellerProfile } from '../services/sellerInfoService'
 import './SellerLayout.css'
 
 // 각 메뉴에 실제 브라우저 주소를 연결합니다.
@@ -25,6 +27,38 @@ function SellerLayout() {
   // 코드에서 다른 페이지로 이동할 때 사용하는 함수입니다.
   const navigate = useNavigate()
 
+  const [sellerIdentity, setSellerIdentity] = useState({
+    companyName: '',
+    userName: '',
+  })
+
+  // 로그인한 판매자의 상호명과 이름을 불러옵니다.
+  useEffect(() => {
+    let isActive = true
+
+    async function loadSellerIdentity() {
+      try {
+        const profile = await getSellerProfile()
+
+        if (isActive) {
+          setSellerIdentity({
+            companyName: profile.company_name ?? '',
+            userName: profile.user_name ?? '',
+          })
+        }
+      } catch {
+        // 공통 레이아웃 정보 조회 실패가 다른 메뉴 이용을 막지 않도록
+        // 별도의 오류 화면으로 전환하지 않습니다.
+      }
+    }
+
+    loadSellerIdentity()
+
+    return () => {
+      isActive = false
+    }
+  }, [])
+
   // 저장된 로그인 토큰을 삭제하고 로그인 화면으로 이동합니다.
   function handleLogout() {
     removeAccessToken()
@@ -37,9 +71,14 @@ function SellerLayout() {
         <div className="seller-logo">
           <span className="seller-logo-mark">S</span>
 
-          <div>
-            <strong>Seller Console</strong>
-            <span>shopdb2</span>
+          <div className="seller-identity">
+            <strong title={sellerIdentity.companyName}>
+              {sellerIdentity.companyName || '판매자 상호명'}
+            </strong>
+
+            <span title={sellerIdentity.userName}>
+              {sellerIdentity.userName || '판매자'}
+            </span>
           </div>
         </div>
 
