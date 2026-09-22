@@ -3,6 +3,7 @@ import { Navigate, Route, Routes } from 'react-router-dom'
 import './App.css'
 import RequireSellerAuth from './components/RequireSellerAuth'
 import SellerLayout from './layouts/SellerLayout'
+import CartInsightsPage from './pages/CartInsightsPage'
 import DashboardPage from './pages/DashboardPage'
 import InventoryPage from './pages/InventoryPage'
 import LoginPage from './pages/LoginPage'
@@ -27,6 +28,7 @@ function App() {
             element={<Navigate to="/dashboard" replace />}
           />
           <Route path="/dashboard" element={<DashboardPage />} />
+          <Route path="/cart-insights" element={<CartInsightsPage />}/>
           <Route path="/products" element={<ProductsPage />} />
           <Route path="/inventory" element={<InventoryPage />} />
           <Route path="/orders" element={<OrdersPage />} />

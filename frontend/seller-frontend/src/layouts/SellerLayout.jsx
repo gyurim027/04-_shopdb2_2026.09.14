@@ -17,6 +17,7 @@ const menuItems = [
   { label: '환불 관리', path: '/refunds' },
 
   { label: '매출', path: '/sales' },
+  { label: '장바구니 분석', path: '/cart-insights' },
   { label: '내 정보', path: '/info' },
 ]
 
