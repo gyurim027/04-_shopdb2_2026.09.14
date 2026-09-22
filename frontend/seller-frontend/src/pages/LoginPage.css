@@ -1,16 +1,25 @@
-/* 로그인 화면을 브라우저 중앙에 배치합니다. */
+/* 로그인 화면 전체 배경입니다. */
 .login-page {
   display: grid;
   min-height: 100vh;
-  padding: var(--space-lg);
+  padding: 32px;
   place-items: center;
   background-color: var(--color-canvas);
+}
+
+/* 일반 로그인과 테스트 로그인을 좌우로 배치합니다. */
+.login-shell {
+  display: grid;
+  width: 100%;
+  max-width: 1040px;
+  grid-template-columns: minmax(0, 420px) minmax(0, 1fr);
+  align-items: center;
+  gap: 56px;
 }
 
 /* 로그인 입력 영역을 담는 흰색 카드입니다. */
 .login-card {
   width: 100%;
-  max-width: 420px;
   padding: var(--space-xxl);
   background-color: var(--color-surface);
   border: 1px solid var(--color-hairline);
@@ -29,6 +38,7 @@
   display: grid;
   width: 40px;
   height: 40px;
+  flex-shrink: 0;
   place-items: center;
   color: #ffffff;
   font-weight: 700;
@@ -116,7 +126,7 @@
   cursor: pointer;
 }
 
-.login-submit-button:hover {
+.login-submit-button:hover:not(:disabled) {
   background-color: var(--color-primary-active);
 }
 
@@ -125,16 +135,6 @@
   color: var(--color-ink-faint);
   font-size: var(--font-size-caption);
   text-align: center;
-}
-
-@media (max-width: 480px) {
-  .login-page {
-    padding: var(--space-md);
-  }
-
-  .login-card {
-    padding: var(--space-lg);
-  }
 }
 
 /* 로그인 실패 메시지입니다. */
@@ -152,4 +152,149 @@
 .login-submit-button:disabled {
   cursor: not-allowed;
   opacity: 0.6;
+}
+
+/* 개발 환경에서만 표시되는 테스트 로그인 영역입니다. */
+.test-login-panel {
+  display: flex;
+  width: 100%;
+  max-width: 480px;
+  flex-direction: column;
+  justify-self: start;
+  gap: 20px;
+}
+
+.test-login-heading > span {
+  display: inline-flex;
+  padding: 5px 9px;
+  color: #005fae;
+  font-size: 12px;
+  font-weight: 700;
+  background: #eef7ff;
+  border-radius: 9999px;
+}
+
+.test-login-heading h2 {
+  margin: 12px 0 8px;
+  color: var(--color-ink);
+  font-size: 24px;
+  letter-spacing: -0.5px;
+}
+
+.test-login-heading p {
+  margin: 0;
+  color: var(--color-ink-muted);
+  font-size: 14px;
+  line-height: 1.6;
+}
+
+.test-login-list {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+.test-seller-card {
+  display: grid;
+  min-height: 108px;
+  padding: 16px 20px;
+  grid-template-columns: minmax(0, 1fr) auto;
+  grid-template-rows: auto auto auto;
+  column-gap: 20px;
+  color: var(--color-ink);
+  font: inherit;
+  text-align: left;
+  cursor: pointer;
+  background: #f3f5f7;
+  border: 1px solid #dfe3e7;
+  border-radius: 12px;
+  box-shadow: none;
+  transition:
+    border-color 160ms ease,
+    background-color 160ms ease,
+    transform 160ms ease;
+}
+
+.test-seller-card:hover:not(:disabled) {
+  background: #eef6fd;
+  border-color: #a8cfee;
+  transform: translateY(-1px);
+}
+
+.test-seller-card:focus-visible {
+  outline: 3px solid rgb(0 117 222 / 20%);
+  outline-offset: 2px;
+}
+
+.test-seller-card:disabled {
+  cursor: not-allowed;
+  opacity: 0.6;
+}
+
+.test-seller-branch {
+  color: var(--color-ink-muted);
+  font-size: 13px;
+}
+
+.test-seller-card strong {
+  margin-top: 3px;
+  font-size: 18px;
+  letter-spacing: -0.2px;
+}
+
+.test-seller-card small {
+  margin-top: 8px;
+  color: var(--color-ink-faint);
+  font-size: 11px;
+}
+
+.test-seller-action {
+  grid-column: 2;
+  grid-row: 1 / 4;
+  align-self: center;
+  color: #52606d;
+  font-size: 13px;
+  font-weight: 600;
+  white-space: nowrap;
+}
+
+.test-seller-card:hover:not(:disabled) .test-seller-action {
+  color: var(--color-primary);
+}
+
+.test-login-notice {
+  margin: 0;
+  color: var(--color-ink-faint);
+  font-size: 12px;
+  text-align: center;
+}
+
+/* 태블릿에서는 로그인과 테스트 영역을 위아래로 배치합니다. */
+@media (max-width: 860px) {
+  .login-shell {
+    max-width: 520px;
+    grid-template-columns: 1fr;
+    gap: 80px;
+  }
+}
+
+/* 모바일에서는 여백과 카드 내부 간격을 줄입니다. */
+@media (max-width: 480px) {
+  .login-page {
+    padding: var(--space-md);
+  }
+
+  .login-card {
+    padding: var(--space-lg);
+  }
+
+  .test-seller-card {
+    grid-template-columns: 1fr;
+  }
+
+  .test-seller-action {
+    margin-top: 16px;
+    grid-column: 1;
+    grid-row: auto;
+  }
 }
