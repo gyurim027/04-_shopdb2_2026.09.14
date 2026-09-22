@@ -1,9 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { fetchInquiries, answerInquiry } from '../../services/adminApi';
+import { fetchInquiries, answerInquiry, fetchExchangeRequests } from '../../services/adminApi';
 import { useNavigate } from 'react-router-dom';
 import { 
   Layout, Menu, Button, Card, Row, Col, Statistic, message, Space, Typography,
-  Modal, Form, Input, Select, Tabs, DatePicker 
+  Modal, Form, Input, Select, Tabs, DatePicker, Badge 
 } from 'antd';
 import {
   HomeOutlined, ShoppingCartOutlined, UserOutlined, AppstoreOutlined,
@@ -36,6 +36,7 @@ export default function AdminDashboard() {
   const [inquiries, setInquiries] = useState([]);
   const [refundPolicies, setRefundPolicies] = useState([]);
   const [refundRequests, setRefundRequests] = useState([]);
+  const [exchangeRequests, setExchangeRequests] = useState([]); 
   const [companyPolicies, setCompanyPolicies] = useState([]);
   const [organizations, setOrganizations] = useState([]); 
   const [summary, setSummary] = useState(null);
@@ -91,7 +92,7 @@ export default function AdminDashboard() {
       setUserInfo({ name: currentName, orgType: currentOrgType, orgId: currentOrgId, userId: currentUserId });
 
       const endpoints = [
-        { url: '/api/admin/dashboard/summary', setter: setSummary, isObject: true },
+        { url: '/api/admin/refunds/dashboard/summary', setter: setSummary, isObject: true },
         { url: '/api/admin/users', setter: setUsers },
         { url: '/api/admin/orders', setter: setOrders },
         { url: '/api/admin/products/inventories', setter: setInventories },
@@ -99,6 +100,7 @@ export default function AdminDashboard() {
         { url: '/api/admin/support/inquiries', setter: setInquiries },
         { url: '/api/admin/refunds/policies', setter: setRefundPolicies },
         { url: '/api/admin/refunds/requests', setter: setRefundRequests },
+        { url: '/api/admin/refunds/exchanges', setter: setExchangeRequests }, 
         { url: '/api/admin/support/policies', setter: setCompanyPolicies },
         { url: '/api/admin/organizations', setter: setOrganizations }, 
       ];
@@ -256,6 +258,18 @@ export default function AdminDashboard() {
     }
   };
 
+  const handleApproveExchange = (exchangeRequestId) => {
+    if (window.confirm("해당 교환 요청을 승인하시겠습니까?")) {
+      handleAction(`/api/admin/refunds/exchanges/${exchangeRequestId}/approve`, 'PATCH', {}, '교환 요청이 승인 처리되었습니다!');
+    }
+  };
+
+  const handleRejectExchange = (exchangeRequestId) => {
+    if (window.confirm("해당 교환 요청을 반려하시겠습니까?")) {
+      handleAction(`/api/admin/refunds/exchanges/${exchangeRequestId}/reject`, 'PATCH', {}, '교환 요청이 반려 처리되었습니다!');
+    }
+  };
+
   const handleCreateProductSubmit = async (values) => {
     if (userInfo.orgType !== 'HEADQUARTER' && userInfo.orgType !== 'BRANCH') {
       return message.warning('상품 등록 권한이 없습니다.');
@@ -352,30 +366,32 @@ export default function AdminDashboard() {
           <>
             <DashboardHome summary={summary} orders={orders} refundRequests={refundRequests} inquiries={inquiries} users={users} inventories={inventories} onNavigate={(tabKey) => setActiveTab(tabKey)} />
             
-            {/* ====== DB 관리 열기 섹션 ====== */}
-            <div style={{ border: '2px solid #f97316', padding: '20px', borderRadius: '8px', marginTop: '40px', backgroundColor: 'white', boxShadow: '0 1px 4px rgba(0,0,0,0.03)' }}>
-              <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
-                <div>
-                  <span style={{ color: 'teal', fontWeight: 'bold' }}>데이터 운영</span>
-                  <h2 style={{ margin: '5px 0 0 0' }}>별도 DB 관리 화면</h2>
+            {/* ====== 본사 최고관리자 전용 DB 관리 섹션 (지점장 계정에서는 숨김) ====== */}
+            {userInfo.orgType === 'HEADQUARTER' && (
+              <div style={{ border: '2px solid #f97316', padding: '20px', borderRadius: '8px', marginTop: '40px', backgroundColor: 'white', boxShadow: '0 1px 4px rgba(0,0,0,0.03)' }}>
+                <div style={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center' }}>
+                  <div>
+                    <span style={{ color: 'teal', fontWeight: 'bold' }}>데이터 운영</span>
+                    <h2 style={{ margin: '5px 0 0 0' }}>별도 DB 관리 화면</h2>
+                  </div>
+                  <p style={{ color: '#666', margin: 0 }}>원본 테이블 검색, CRUD, 행 상세 조회는 `/dbAdmin` 경로에서 처리합니다.</p>
                 </div>
-                <p style={{ color: '#666', margin: 0 }}>원본 테이블 검색, CRUD, 행 상세 조회는 `/dbAdmin` 경로에서 처리합니다.</p>
+                
+                <div style={{ border: '1px solid #eee', padding: '20px', borderRadius: '8px', marginTop: '20px', width: '350px' }}>
+                  <span style={{ color: 'teal', fontSize: '12px', fontWeight: 'bold', backgroundColor: '#e6fffa', padding: '4px 8px', borderRadius: '4px' }}>전용 경로</span>
+                  <h3 style={{ margin: '15px 0' }}>`/dbAdmin`</h3>
+                  <p style={{ fontSize: '14px', color: '#555', marginBottom: '20px', lineHeight: '1.5' }}>
+                    본사 전용 화면에서 허용된 모든 테이블을 검색하고 수정할 수 있습니다.
+                  </p>
+                  <button 
+                    onClick={() => navigate('/dbAdmin')} 
+                    style={{ backgroundColor: '#f97316', color: 'white', padding: '12px 24px', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', width: '100%' }}
+                  >
+                    DB 관리 열기
+                  </button>
+                </div>
               </div>
-              
-              <div style={{ border: '1px solid #eee', padding: '20px', borderRadius: '8px', marginTop: '20px', width: '350px' }}>
-                <span style={{ color: 'teal', fontSize: '12px', fontWeight: 'bold', backgroundColor: '#e6fffa', padding: '4px 8px', borderRadius: '4px' }}>전용 경로</span>
-                <h3 style={{ margin: '15px 0' }}>`/dbAdmin`</h3>
-                <p style={{ fontSize: '14px', color: '#555', marginBottom: '20px', lineHeight: '1.5' }}>
-                  본사 전용 화면에서 허용된 모든 테이블을 검색하고 수정할 수 있습니다.
-                </p>
-                <button 
-                  onClick={() => navigate('/dbAdmin')} 
-                  style={{ backgroundColor: '#f97316', color: 'white', padding: '12px 24px', border: 'none', borderRadius: '4px', cursor: 'pointer', fontWeight: 'bold', width: '100%' }}
-                >
-                  DB 관리 열기
-                </button>
-              </div>
-            </div>
+            )}
             {/* ====== DB 관리 열기 섹션 끝 ====== */}
           </>
         );
@@ -423,7 +439,19 @@ export default function AdminDashboard() {
       case 'refunds':
         return (
           <Card title={<span style={{ color: '#37352F', fontWeight: 600, fontSize: '16px' }}>교환/환불/정산 관리</span>} variant="borderless" style={{ borderRadius: 12, background: '#FFFFFF', boxShadow: '0 1px 4px rgba(0,0,0,0.03), 0 0 0 1px #EAE8E4' }}>
-            <RefundTable refundPolicies={refundPolicies} refundRequests={refundRequests} users={users} organizations={organizations} userInfo={userInfo} onApprove={handleApproveRefund} onReject={handleRejectRefund} loading={loading} />
+            <RefundTable 
+              refundPolicies={refundPolicies} 
+              refundRequests={refundRequests} 
+              exchangeRequests={exchangeRequests} 
+              users={users} 
+              organizations={organizations} 
+              userInfo={userInfo} 
+              onApprove={handleApproveRefund} 
+              onReject={handleRejectRefund} 
+              onApproveExchange={handleApproveExchange} 
+              onRejectExchange={handleRejectExchange} 
+              loading={loading} 
+            />
           </Card>
         );
       case 'policies':
@@ -441,7 +469,17 @@ export default function AdminDashboard() {
         return null;
     }
   };
-
+// 교환 대기 건수 (exchange_status 혹은 return_status 모두 포용)
+  const pendingExchangeCount = Array.isArray(exchangeRequests) 
+    ? exchangeRequests.filter(req => req.return_status === 'REQUESTED' || req.exchange_status === 'REQUESTED').length 
+    : 0;
+  
+  // 환불 대기 건수
+  const pendingRefundCount = Array.isArray(refundRequests) 
+    ? refundRequests.filter(req => req.refund_status === 'REQUESTED').length 
+    : 0;
+  
+  const totalPendingRefundExchange = pendingExchangeCount + pendingRefundCount;
   return (
     <Layout style={{ minHeight: '100vh', background: '#FAFAF9' }}>
       
@@ -467,7 +505,11 @@ export default function AdminDashboard() {
             { key: 'users', icon: <UserOutlined style={{ fontSize: '15px', color: '#666' }} />, label: `회원/조직 (${users.length})` },
             { key: 'inventory', icon: <AppstoreOutlined style={{ fontSize: '15px', color: '#666' }} />, label: `상품/재고 (${inventories.length})` },
             { key: 'support', icon: <MessageOutlined style={{ fontSize: '15px', color: '#666' }} />, label: `고객 문의 (${inquiries.length})` },
-            { key: 'refunds', icon: <PayCircleOutlined style={{ fontSize: '15px', color: '#666' }} />, label: `교환/환불/정산 (${refundRequests.filter(req => req.refund_status === 'REQUESTED').length})` },
+            { 
+              key: 'refunds', 
+              icon: <PayCircleOutlined style={{ fontSize: '15px', color: '#666' }} />, 
+              label: `교환/환불/정산${totalPendingRefundExchange > 0 ? ` (${totalPendingRefundExchange})` : ' (0)'}` 
+            },
             { key: 'policies', icon: <FileTextOutlined style={{ fontSize: '15px', color: '#666' }} />, label: '회사 정책' },
           ]}
         />
@@ -581,7 +623,7 @@ export default function AdminDashboard() {
               <Input placeholder="예: 프리미엄 무선 게이밍 마우스" />
             </Form.Item>
             <Form.Item name="product_code" label="상품 코드" rules={[{ required: true, message: '상품 코드를 입력해주세요.' }]}>
-                      <Input placeholder="예: P2026-001" />
+              <Input placeholder="예: P2026-001" />
             </Form.Item>
             <Form.Item name="regular_price" label="정가 (원)" rules={[{ required: true, message: '정가를 입력해주세요.' }]}>
               <Input type="number" placeholder="예: 100000" />
@@ -606,7 +648,7 @@ export default function AdminDashboard() {
         >
           <Form form={answerForm} layout="vertical" onFinish={handleAnswerSubmit} style={{ marginTop: 10 }}>
             <Form.Item name="answer_content" label="답변 내용" rules={[{ required: true, message: '답변 내용을 입력해주세요.' }]}>
-              <TextArea rows={4} placeholder="고객 문의에 대한 답변 내용을 상세히 입력하세요." />
+              <TextArea rows_={4} placeholder="고객 문의에 대한 답변 내용을 상세히 입력하세요." />
             </Form.Item>
             <Button type="primary" htmlType="submit" block style={{ marginTop: 10, background: '#37352F', borderColor: '#37352F', borderRadius: '6px' }}>답변 등록하기</Button>
           </Form>

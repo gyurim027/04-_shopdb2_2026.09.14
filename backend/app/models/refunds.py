@@ -7,9 +7,8 @@ do not change the database schema for coding convenience.
 from datetime import date, datetime
 from decimal import Decimal
 
-from sqlalchemy import Date, DateTime, ForeignKey, Integer, Numeric, String, Text
+from sqlalchemy import Column, BigInteger, Date, DateTime, ForeignKey, Integer, Numeric, String, Text, func
 from sqlalchemy.orm import Mapped, mapped_column
-
 from app.core.database import Base
 
 
@@ -73,3 +72,22 @@ class RefundItem(Base):
     order_item_id: Mapped[int] = mapped_column(Integer, nullable=False)
     refund_quantity: Mapped[int] = mapped_column(Integer, nullable=False)
     refund_amount: Mapped[Decimal] = mapped_column(Numeric(15, 2), nullable=False)
+
+class ReturnRequest(Base):
+    __tablename__ = "return_requests"
+
+    return_request_id = Column(BigInteger, primary_key=True, autoincrement=True)
+    order_id = Column(BigInteger, ForeignKey("orders.order_id"), nullable=False)
+    return_reason_code = Column(String(50), nullable=False)
+    return_reason_detail = Column(String(1000), nullable=True)
+    return_status = Column(String(30), nullable=False, default="REQUESTED")
+    pickup_method = Column(String(30), nullable=False)
+    carrier_name = Column(String(100), nullable=True)
+    tracking_no = Column(String(100), nullable=True)
+    requested_at = Column(DateTime, server_default=func.now())
+    pickup_at = Column(DateTime, nullable=True)
+    received_at = Column(DateTime, nullable=True)
+    inspected_at = Column(DateTime, nullable=True)
+    completed_at = Column(DateTime, nullable=True)
+    refund_request_id = Column(BigInteger, ForeignKey("refund_requests.refund_request_id"), nullable=True)
+    updated_at = Column(DateTime, server_default=func.now(), onupdate=func.now())

@@ -1,12 +1,24 @@
 import React, { useState } from 'react';
-import { Table, Tag, Button, Space, Typography, Card, Radio } from 'antd';
+import { Table, Tag, Button, Space, Typography, Card, Radio, Tabs, Badge } from 'antd';
 
 const { Text } = Typography;
 
-export default function RefundTable({ refundPolicies, refundRequests, users, organizations = [], userInfo, onApprove, onReject, loading }) {
+export default function RefundTable({ 
+  refundPolicies, 
+  refundRequests, 
+  exchangeRequests = [], 
+  users, 
+  organizations = [], 
+  userInfo, 
+  onApprove, 
+  onReject, 
+  onApproveExchange, 
+  onRejectExchange,  
+  loading 
+}) {
   const [selectedOrgId, setSelectedOrgId] = useState('all');
+  const [activeTab, setActiveTab] = useState('refund');
 
-  // 본사(1번)를 제외한 지사 목록만 필터링 탭에 사용
   const branchOrganizations = organizations ? organizations.filter(org => Number(org.org_id) !== 1) : [];
 
   const getUserName = (userId) => {
@@ -14,23 +26,29 @@ export default function RefundTable({ refundPolicies, refundRequests, users, org
     return found ? `${found.user_name} (ID: ${userId})` : `회원 번호: ${userId}`;
   };
 
-  // 환불 요청 내역 필터링 (본사 제외 및 선택된 지사별 분류)
-  const filteredRequests = (userInfo?.orgType === 'HEADQUARTER')
+  const filteredRefundRequests = (userInfo?.orgType === 'HEADQUARTER')
     ? refundRequests.filter(req => {
         const user = users.find(u => Number(u.user_id) === Number(req.buyer_user_id));
         const orgId = user ? user.org_id : null;
-
-        // 본사(1번) 데이터는 항상 제외
         if (Number(orgId) === 1) return false;
-
-        // 특정 지사 탭을 선택했을 경우
         if (selectedOrgId !== 'all') {
           return Number(orgId) === Number(selectedOrgId);
         }
-
         return true;
       })
     : refundRequests;
+
+  const filteredExchangeRequests = (userInfo?.orgType === 'HEADQUARTER')
+    ? exchangeRequests.filter(req => {
+        const user = users.find(u => Number(u.user_id) === Number(req.buyer_user_id));
+        const orgId = user ? user.org_id : null;
+        if (Number(orgId) === 1) return false;
+        if (selectedOrgId !== 'all') {
+          return Number(orgId) === Number(selectedOrgId);
+        }
+        return true;
+      })
+    : exchangeRequests;
 
   const policyColumns = [
     { title: '정책 ID', dataIndex: 'refund_policy_id', width: 90, align: 'center' },
@@ -42,7 +60,7 @@ export default function RefundTable({ refundPolicies, refundRequests, users, org
     { title: '활성 여부', dataIndex: 'active_yn', width: 100, align: 'center', render: s => <Tag color={s === 'Y' ? 'success' : 'default'}>{s === 'Y' ? '활성' : '비활성'}</Tag> },
   ];
 
-  const requestColumns = [
+  const refundRequestColumns = [
     { title: '요청 ID', dataIndex: 'refund_request_id', width: 90, align: 'center' },
     { title: '주문 ID', dataIndex: 'order_id', width: 90, align: 'center' },
     { title: '회원명 (번호)', width: 170, render: (_, r) => <Text strong style={{ whiteSpace: 'nowrap' }}>{getUserName(r.buyer_user_id)}</Text> },
@@ -58,6 +76,25 @@ export default function RefundTable({ refundPolicies, refundRequests, users, org
       ) : <Text type="secondary" style={{ fontSize: 12 }}>처리 완료</Text>
     )},
   ];
+
+  const exchangeRequestColumns = [
+    { title: '교환 ID', dataIndex: 'exchange_request_id', width: 90, align: 'center' },
+    { title: '주문 ID', dataIndex: 'order_id', width: 90, align: 'center' },
+    { title: '회원명 (번호)', width: 170, render: (_, r) => <Text strong style={{ whiteSpace: 'nowrap' }}>{getUserName(r.buyer_user_id)}</Text> },
+    { title: '교환 사유', dataIndex: 'exchange_reason', width: 250, render: t => t || '-' },
+    { title: '상태', dataIndex: 'exchange_status', width: 120, align: 'center', render: s => <Tag color={s === 'REQUESTED' ? 'warning' : s === 'APPROVED' ? 'blue' : 'error'}>{s}</Tag> },
+    { title: '작업', width: 150, align: 'center', render: (_, r) => (
+      r.exchange_status === 'REQUESTED' ? (
+        <Space size="small">
+          <Button size="small" type="primary" style={{ backgroundColor: '#52c41a' }} onClick={() => onApproveExchange(r.exchange_request_id)}>승인</Button>
+          <Button size="small" danger onClick={() => onRejectExchange(r.exchange_request_id)}>반려</Button>
+        </Space>
+      ) : <Text type="secondary" style={{ fontSize: '12px' }}>처리 완료</Text>
+    )},
+  ];
+
+  const pendingRefundsTabCount = filteredRefundRequests.filter(r => r.refund_status === 'REQUESTED').length;
+  const pendingExchangesTabCount = filteredExchangeRequests.filter(r => r.exchange_status === 'REQUESTED').length;
 
   return (
     <>
@@ -87,27 +124,61 @@ export default function RefundTable({ refundPolicies, refundRequests, users, org
           }}
         />
       </Card>
-      
+
       <Card 
-        title={<span style={{ color: '#37352F', fontWeight: 600, fontSize: '15px' }}>고객 환불 요청 내역 및 처리</span>} 
+        title={<span style={{ color: '#37352F', fontWeight: 600, fontSize: '15px' }}>고객 요청 내역 및 처리</span>} 
         variant="borderless" 
         style={{ borderRadius: 12, background: '#FFFFFF', boxShadow: '0 1px 3px rgba(0,0,0,0.05), 0 0 0 1px #E9E8E4' }}
       >
-        {/* 본사(1번)를 제외한 지사들만 탭으로 노출 */}
+        {/* 스타일 수정: display: flex와 justifyContent: 'center' 추가 */}
+        <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 20 }}>
+          <Tabs 
+            activeKey={activeTab} 
+            onChange={setActiveTab} 
+            items={[
+              { 
+                key: 'refund', 
+                label: (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', lineHeight: 'normal' }}>
+                    <span>고객 환불 요청 내역 및 처리</span>
+                    <Badge count={pendingRefundsTabCount} style={{ backgroundColor: '#faad14' }} />
+                  </div>
+                ) 
+              },
+              { 
+                key: 'exchange', 
+                label: (
+                  <div style={{ display: 'flex', alignItems: 'center', gap: '8px', lineHeight: 'normal' }}>
+                    <span>고객 교환 요청 내역 및 처리</span>
+                    <Badge count={pendingExchangesTabCount} style={{ backgroundColor: '#52c41a' }} />
+                  </div>
+                ) 
+              }
+            ]}
+          />
+        </div>
+
         {userInfo?.orgType === 'HEADQUARTER' && branchOrganizations.length > 0 && (
           <div style={{ marginBottom: '16px' }}>
             <Radio.Group value={selectedOrgId} onChange={(e) => setSelectedOrgId(e.target.value)} buttonStyle="solid">
               <Radio.Button value="all">
-                전체 보기 ({refundRequests.filter(req => {
+                전체 보기 ({activeTab === 'refund' ? refundRequests.filter(req => {
+                  const u = users.find(x => Number(x.user_id) === Number(req.buyer_user_id));
+                  return Number(u ? u.org_id : null) !== 1;
+                }).length : exchangeRequests.filter(req => {
                   const u = users.find(x => Number(x.user_id) === Number(req.buyer_user_id));
                   return Number(u ? u.org_id : null) !== 1;
                 }).length})
               </Radio.Button>
               {branchOrganizations.map(org => {
-                const count = refundRequests.filter(req => {
+                const count = activeTab === 'refund' ? refundRequests.filter(req => {
+                  const u = users.find(x => Number(x.user_id) === Number(req.buyer_user_id));
+                  return Number(u ? u.org_id : null) === Number(org.org_id);
+                }).length : exchangeRequests.filter(req => {
                   const u = users.find(x => Number(x.user_id) === Number(req.buyer_user_id));
                   return Number(u ? u.org_id : null) === Number(org.org_id);
                 }).length;
+
                 return (
                   <Radio.Button key={org.org_id} value={org.org_id}>
                     {org.org_name} ({count})
@@ -118,7 +189,11 @@ export default function RefundTable({ refundPolicies, refundRequests, users, org
           </div>
         )}
 
-        <Table columns={requestColumns} dataSource={filteredRequests || []} rowKey="refund_request_id" loading={loading} pagination={{ pageSize: 5 }} size="middle" scroll={{ x: 1000 }} />
+        {activeTab === 'refund' ? (
+          <Table columns={refundRequestColumns} dataSource={filteredRefundRequests || []} rowKey="refund_request_id" loading={loading} pagination={{ pageSize: 5 }} size="middle" scroll={{ x: 1000 }} />
+        ) : (
+          <Table columns={exchangeRequestColumns} dataSource={filteredExchangeRequests || []} rowKey="exchange_request_id" loading={loading} pagination={{ pageSize: 5 }} size="middle" scroll={{ x: 1000 }} />
+        )}
       </Card>
     </>
   );
