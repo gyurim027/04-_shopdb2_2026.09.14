@@ -24,6 +24,7 @@
   display: grid;
   width: 36px;
   height: 36px;
+  flex-shrink: 0;
   place-items: center;
   color: #ffffff;
   font-weight: 700;
@@ -31,17 +32,27 @@
   border-radius: var(--radius-md);
 }
 
-.seller-logo div {
+.seller-identity {
   display: flex;
+  min-width: 0;
+  flex: 1;
   flex-direction: column;
   gap: 2px;
 }
 
-.seller-logo strong {
+.seller-identity strong,
+.seller-identity span {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.seller-identity strong {
+  color: var(--color-ink);
   font-size: var(--font-size-body-md);
 }
 
-.seller-logo div span {
+.seller-identity span {
   color: var(--color-ink-faint);
   font-size: 12px;
 }
