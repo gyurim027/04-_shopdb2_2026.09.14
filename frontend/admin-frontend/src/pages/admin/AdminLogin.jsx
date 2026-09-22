@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { Form, Input, Button, Card, Typography, message } from 'antd';
+import { Form, Input, Button, Card, Typography, message, Space } from 'antd';
 import { UserOutlined, LockOutlined } from '@ant-design/icons';
 import { useNavigate } from 'react-router-dom';
 
@@ -7,7 +7,8 @@ const { Title, Text } = Typography;
 
 export default function AdminLogin() {
   const [loading, setLoading] = useState(false);
-  const navigate = useNavigate();
+  const [form] = Form.useForm();
+  const useNavigateInstance = useNavigate();
 
   // 기존 handleLogin 로직을 Ant Design의 onFinish 폼 제출 이벤트에 맞게 이관
   const onFinish = async (values) => {
@@ -41,7 +42,7 @@ export default function AdminLogin() {
         message.success('로그인 성공!');
         
         // 3. 대시보드로 이동
-        navigate('/admin/dashboard'); 
+        useNavigateInstance('/admin/dashboard'); 
       } else {
         const errorData = await response.json();
         message.error(errorData.detail || '로그인에 실패했습니다.');
@@ -52,6 +53,12 @@ export default function AdminLogin() {
       // 성공/실패 여부에 상관없이 로딩 상태 해제
       setLoading(false);
     }
+  };
+
+  // 🚀 시연/테스트용 계정 자동 입력 및 로그인 헬퍼 함수
+  const handleQuickLogin = (username, password) => {
+    form.setFieldsValue({ username, password });
+    onFinish({ username, password });
   };
 
   return (
@@ -65,10 +72,9 @@ export default function AdminLogin() {
       <Card 
         style={{ width: 380, padding: '10px' }} 
         styles={{ body: { padding: '24px' } }}
-        boxShadow="0 8px 24px rgba(0,0,0,0.08)"
         bordered={false} // 카드 테두리를 없애서 더 모던한 느낌 부여
       >
-        <div style={{ textAlign: 'center', marginBottom: 32 }}>
+        <div style={{ textAlign: 'center', marginBottom: 28 }}>
           <Title level={3} style={{ margin: 0, color: '#0050b3' }}>
             SHOP ADMIN
           </Title>
@@ -78,6 +84,7 @@ export default function AdminLogin() {
         </div>
 
         <Form
+          form={form}
           name="admin_login_form"
           onFinish={onFinish}
           size="large"
@@ -103,12 +110,44 @@ export default function AdminLogin() {
             />
           </Form.Item>
 
-          <Form.Item style={{ marginTop: 32, marginBottom: 0 }}>
+          <Form.Item style={{ marginTop: 24, marginBottom: 0 }}>
             <Button type="primary" htmlType="submit" block loading={loading} style={{ height: '40px' }}>
               로그인
             </Button>
           </Form.Item>
         </Form>
+
+        {/* --- 💡 권한별 빠른 테스트 버튼 영역 --- */}
+        <div style={{ borderTop: '1px solid #f0f0f0', marginTop: 24, paddingTop: 16, textAlign: 'center' }}>
+          <Text type="secondary" style={{ fontSize: '12px', display: 'block', marginBottom: 10 }}>
+            시연/테스트용 빠른 권한 로그인
+          </Text>
+          <Space direction="vertical" style={{ width: '100%' }} size="small">
+            <Button 
+              size="small" 
+              ghost 
+              type="primary" 
+              style={{ color: '#0050b3', borderColor: '#91d5ff', width: '100%' }}
+              onClick={() => handleQuickLogin('admin01', 'admin')}
+            >
+              👑 최고관리자 권한 로그인
+            </Button>
+            <Button 
+              size="small" 
+              style={{ width: '100%' }}
+              onClick={() => handleQuickLogin('manager_jeonju', 'password123')}
+            >
+              🏢 전주지점장 권한 로그인
+            </Button>
+            <Button 
+              size="small" 
+              style={{ width: '100%' }}
+              onClick={() => handleQuickLogin('manager_busan', 'password123')}
+            >
+              🏢 부산지점장 권한 로그인
+            </Button>
+          </Space>
+        </div>
       </Card>
     </div>
   );

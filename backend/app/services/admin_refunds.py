@@ -168,7 +168,10 @@ def approve_refund_request(
         if approved_amount is not None
         else refund_request.requested_amount
     )
+    
+    # 어드민(지점장/본사) API 호출 시 최종 상태인 APPROVED로 변경
     refund_request.refund_status = "APPROVED"
+        
     refund_request.approved_at = datetime.now(timezone.utc)
     db.commit()
     db.refresh(refund_request)
@@ -218,7 +221,7 @@ def _assert_exchange_request_in_scope(
 def list_exchange_requests(
     db: Session, auth: AuthContext, exchange_status: str | None = None
 ) -> list:
-    """교환 요청 목록을 주문 및 회원 정보와 조인하여 프론트엔드 형식에 맞게 조회"""
+    """교환(반품) 요청 목록을 주문 및 회원 정보와 조인하여 프론트엔드 형식에 맞게 조회"""
     scoped = get_scoped_org_ids(db, auth)
     
     sql = """
@@ -228,7 +231,8 @@ def list_exchange_requests(
             o.buyer_user_id,
             rr.return_reason_code,
             rr.return_reason_detail,
-            rr.return_status
+            rr.return_status,
+            rr.requested_at
         FROM return_requests rr
         JOIN orders o ON rr.order_id = o.order_id
         JOIN users u ON o.buyer_user_id = u.user_id
@@ -255,6 +259,7 @@ def list_exchange_requests(
             "buyer_user_id": row["buyer_user_id"],
             "exchange_reason": f"[{row['return_reason_code']}] {row['return_reason_detail'] or ''}",
             "exchange_status": row["return_status"],
+            "requested_at": row["requested_at"],
         }
         for row in rows
     ]
@@ -268,7 +273,7 @@ def get_exchange_request(
     return_request = db.get(ReturnRequest, exchange_request_id)
     if return_request is None:
         raise HTTPException(
-            status_code=status.HTTP_404_NOT_FOUND, detail="교환 요청을 찾을 수 없습니다."
+            status_code=status.HTTP_404_NOT_FOUND, detail="반품 요청을 찾을 수 없습니다."
         )
     _assert_exchange_request_in_scope(db, return_request, auth)
     return return_request
@@ -278,7 +283,10 @@ def approve_exchange_request(
     db: Session, exchange_request_id: int, auth: AuthContext
 ):
     exchange_request = get_exchange_request(db, exchange_request_id, auth)
-    exchange_request.return_status = "APPROVED"  # exchange_status -> return_status 로 수정
+    
+    # 어드민(지점장/본사) API 호출 시 최종 상태인 APPROVED로 변경
+    exchange_request.return_status = "APPROVED"
+        
     db.commit()
     db.refresh(exchange_request)
     return exchange_request
@@ -288,7 +296,7 @@ def reject_exchange_request(
     db: Session, exchange_request_id: int, auth: AuthContext
 ):
     exchange_request = get_exchange_request(db, exchange_request_id, auth)
-    exchange_request.return_status = "REJECTED"  # exchange_status -> return_status 로 수정
+    exchange_request.return_status = "REJECTED"
     db.commit()
     db.refresh(exchange_request)
     return exchange_request

@@ -259,14 +259,14 @@ export default function AdminDashboard() {
   };
 
   const handleApproveExchange = (exchangeRequestId) => {
-    if (window.confirm("해당 교환 요청을 승인하시겠습니까?")) {
-      handleAction(`/api/admin/refunds/exchanges/${exchangeRequestId}/approve`, 'PATCH', {}, '교환 요청이 승인 처리되었습니다!');
+    if (window.confirm("해당 반품 요청을 승인하시겠습니까?")) {
+      handleAction(`/api/admin/refunds/exchanges/${exchangeRequestId}/approve`, 'PATCH', {}, '반품 요청이 승인 처리되었습니다!');
     }
   };
 
   const handleRejectExchange = (exchangeRequestId) => {
-    if (window.confirm("해당 교환 요청을 반려하시겠습니까?")) {
-      handleAction(`/api/admin/refunds/exchanges/${exchangeRequestId}/reject`, 'PATCH', {}, '교환 요청이 반려 처리되었습니다!');
+    if (window.confirm("해당 반품 요청을 반려하시겠습니까?")) {
+      handleAction(`/api/admin/refunds/exchanges/${exchangeRequestId}/reject`, 'PATCH', {}, '반품 요청이 반려 처리되었습니다!');
     }
   };
 
@@ -438,7 +438,7 @@ export default function AdminDashboard() {
         );
       case 'refunds':
         return (
-          <Card title={<span style={{ color: '#37352F', fontWeight: 600, fontSize: '16px' }}>교환/환불/정산 관리</span>} variant="borderless" style={{ borderRadius: 12, background: '#FFFFFF', boxShadow: '0 1px 4px rgba(0,0,0,0.03), 0 0 0 1px #EAE8E4' }}>
+          <Card title={<span style={{ color: '#37352F', fontWeight: 600, fontSize: '16px' }}>반품/환불/정산 관리</span>} variant="borderless" style={{ borderRadius: 12, background: '#FFFFFF', boxShadow: '0 1px 4px rgba(0,0,0,0.03), 0 0 0 1px #EAE8E4' }}>
             <RefundTable 
               refundPolicies={refundPolicies} 
               refundRequests={refundRequests} 
@@ -469,7 +469,7 @@ export default function AdminDashboard() {
         return null;
     }
   };
-// 교환 대기 건수 (exchange_status 혹은 return_status 모두 포용)
+//반품 대기 건수 (exchange_status 혹은 return_status 모두 포용)
   const pendingExchangeCount = Array.isArray(exchangeRequests) 
     ? exchangeRequests.filter(req => req.return_status === 'REQUESTED' || req.exchange_status === 'REQUESTED').length 
     : 0;
@@ -508,7 +508,7 @@ export default function AdminDashboard() {
             { 
               key: 'refunds', 
               icon: <PayCircleOutlined style={{ fontSize: '15px', color: '#666' }} />, 
-              label: `교환/환불/정산${totalPendingRefundExchange > 0 ? ` (${totalPendingRefundExchange})` : ' (0)'}` 
+              label: `반품/환불/정산${totalPendingRefundExchange > 0 ? ` (${totalPendingRefundExchange})` : ' (0)'}` 
             },
             { key: 'policies', icon: <FileTextOutlined style={{ fontSize: '15px', color: '#666' }} />, label: '회사 정책' },
           ]}
@@ -530,7 +530,7 @@ export default function AdminDashboard() {
                activeTab === 'users' ? '회원 및 조직 관리' : 
                activeTab === 'inventory' ? '상품 및 재고 관리' : 
                activeTab === 'support' ? '고객 1:1 문의' : 
-               activeTab === 'refunds' ? '교환/환불/정산 관리' : '회사 정책 관리'}
+               activeTab === 'refunds' ? '반품/환불/정산 관리' : '회사 정책 관리'}
             </Title>
           </div>
           <Space size="middle">
@@ -667,7 +667,7 @@ export default function AdminDashboard() {
               <Select placeholder="정책 코드 선택">
                 <Option value="TERMS">TERMS (이용약관)</Option>
                 <Option value="PRIVACY">PRIVACY (개인정보처리방침)</Option>
-                <Option value="REFUND">REFUND (환불/교환 정책)</Option>
+                <Option value="REFUND">REFUND (환불/반품 정책)</Option>
                 <Option value="SHIPPING">SHIPPING (배송 정책)</Option>
               </Select>
             </Form.Item>
