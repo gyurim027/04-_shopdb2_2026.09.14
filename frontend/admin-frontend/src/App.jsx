@@ -1,6 +1,7 @@
 import { BrowserRouter, Routes, Route } from 'react-router-dom';
 import AdminLogin from './pages/admin/AdminLogin';
 import AdminDashboard from './pages/admin/AdminDashboard'; // 👈 새로 추가됨
+import DbAdminPage from './pages/admin/DbAdminPage';
 
 function App() {
   return (
@@ -9,6 +10,7 @@ function App() {
         <Route path="/admin/login" element={<AdminLogin />} />
         {/* 👈 대시보드 화면 주소 추가 */}
         <Route path="/admin/dashboard" element={<AdminDashboard />} /> 
+        <Route path="/dbAdmin" element={<DbAdminPage />} />
       </Routes>
     </BrowserRouter>
   );
