@@ -66,35 +66,85 @@ export default function RefundTable({
     { title: '회원명 (번호)', width: 170, render: (_, r) => <Text strong style={{ whiteSpace: 'nowrap' }}>{getUserName(r.buyer_user_id)}</Text> },
     { title: '환불 사유', dataIndex: 'refund_reason', width: 250, render: t => t || '-' },
     { title: '요청 금액', width: 140, align: 'right', render: (_, r) => <span style={{ whiteSpace: 'nowrap' }}>{Number(r.requested_amount || 0).toLocaleString()} 원</span> },
-    { title: '상태', dataIndex: 'refund_status', width: 120, align: 'center', render: s => <Tag color={s === 'REQUESTED' ? 'warning' : s === 'APPROVED' ? 'blue' : 'error'}>{s}</Tag> },
-    { title: '작업', width: 150, align: 'center', render: (_, r) => (
-      r.refund_status === 'REQUESTED' ? (
-        <Space size="small">
-          <Button size="small" type="primary" style={{ backgroundColor: '#52c41a' }} onClick={() => onApprove(r.refund_request_id)}>승인</Button>
-          <Button size="small" danger onClick={() => onReject(r.refund_request_id)}>반려</Button>
-        </Space>
-      ) : <Text type="secondary" style={{ fontSize: 12 }}>처리 완료</Text>
-    )},
+    { 
+      title: '신청일', 
+      dataIndex: 'requested_at', 
+      width: 110, 
+      align: 'center', 
+      render: (date) => date ? new Date(date).toLocaleDateString() : '-' 
+    },
+    { 
+      title: '상태', 
+      dataIndex: 'refund_status', 
+      width: 120, 
+      align: 'center', 
+      render: s => {
+        let color = 'error';
+        let text = s;
+        if (s === 'REQUESTED') { color = 'warning'; text = '요청됨'; }
+        else if (s === 'SELLER_APPROVED') { color = 'orange'; text = '지점장 승인 대기중'; }
+        else if (s === 'APPROVED') { color = 'blue'; text = '승인 완료'; }
+        return <Tag color={color}>{text}</Tag>;
+      }
+    },
+    { 
+      title: '작업', 
+      width: 150, 
+      align: 'center', 
+      render: (_, r) => (
+        (r.refund_status === 'REQUESTED' || r.refund_status === 'SELLER_APPROVED') ? (
+          <Space size="small">
+            <Button size="small" type="primary" style={{ backgroundColor: '#52c41a' }} onClick={() => onApprove(r.refund_request_id)}>최종 승인</Button>
+            <Button size="small" danger onClick={() => onReject(r.refund_request_id)}>반려</Button>
+          </Space>
+        ) : <Text type="secondary" style={{ fontSize: 12 }}>처리 완료</Text>
+      )
+    },
   ];
 
   const exchangeRequestColumns = [
-    { title: '교환 ID', dataIndex: 'exchange_request_id', width: 90, align: 'center' },
+    { title: '반품 ID', dataIndex: 'exchange_request_id', width: 90, align: 'center' },
     { title: '주문 ID', dataIndex: 'order_id', width: 90, align: 'center' },
     { title: '회원명 (번호)', width: 170, render: (_, r) => <Text strong style={{ whiteSpace: 'nowrap' }}>{getUserName(r.buyer_user_id)}</Text> },
-    { title: '교환 사유', dataIndex: 'exchange_reason', width: 250, render: t => t || '-' },
-    { title: '상태', dataIndex: 'exchange_status', width: 120, align: 'center', render: s => <Tag color={s === 'REQUESTED' ? 'warning' : s === 'APPROVED' ? 'blue' : 'error'}>{s}</Tag> },
-    { title: '작업', width: 150, align: 'center', render: (_, r) => (
-      r.exchange_status === 'REQUESTED' ? (
-        <Space size="small">
-          <Button size="small" type="primary" style={{ backgroundColor: '#52c41a' }} onClick={() => onApproveExchange(r.exchange_request_id)}>승인</Button>
-          <Button size="small" danger onClick={() => onRejectExchange(r.exchange_request_id)}>반려</Button>
-        </Space>
-      ) : <Text type="secondary" style={{ fontSize: '12px' }}>처리 완료</Text>
-    )},
+    { title: '반품 사유', dataIndex: 'exchange_reason', width: 250, render: t => t || '-' },
+    { 
+      title: '신청일', 
+      dataIndex: 'requested_at', 
+      width: 110, 
+      align: 'center', 
+      render: (date) => date ? new Date(date).toLocaleDateString() : '-' 
+    },
+    { 
+      title: '상태', 
+      dataIndex: 'exchange_status', 
+      width: 120, 
+      align: 'center', 
+      render: s => {
+        let color = 'error';
+        let text = s;
+        if (s === 'REQUESTED') { color = 'warning'; text = '요청됨'; }
+        else if (s === 'SELLER_APPROVED') { color = 'orange'; text = '지점장 승인 대기중'; }
+        else if (s === 'APPROVED') { color = 'blue'; text = '승인 완료'; }
+        return <Tag color={color}>{text}</Tag>;
+      }
+    },
+    { 
+      title: '작업', 
+      width: 150, 
+      align: 'center', 
+      render: (_, r) => (
+        (r.exchange_status === 'REQUESTED' || r.exchange_status === 'SELLER_APPROVED') ? (
+          <Space size="small">
+            <Button size="small" type="primary" style={{ backgroundColor: '#52c41a' }} onClick={() => onApproveExchange(r.exchange_request_id)}>최종 승인</Button>
+            <Button size="small" danger onClick={() => onRejectExchange(r.exchange_request_id)}>반려</Button>
+          </Space>
+        ) : <Text type="secondary" style={{ fontSize: '12px' }}>처리 완료</Text>
+      )
+    },
   ];
 
-  const pendingRefundsTabCount = filteredRefundRequests.filter(r => r.refund_status === 'REQUESTED').length;
-  const pendingExchangesTabCount = filteredExchangeRequests.filter(r => r.exchange_status === 'REQUESTED').length;
+  const pendingRefundsTabCount = filteredRefundRequests.filter(r => r.refund_status === 'REQUESTED' || r.refund_status === 'SELLER_APPROVED').length;
+  const pendingExchangesTabCount = filteredExchangeRequests.filter(r => r.exchange_status === 'REQUESTED' || r.exchange_status === 'SELLER_APPROVED').length;
 
   return (
     <>
@@ -130,7 +180,6 @@ export default function RefundTable({
         variant="borderless" 
         style={{ borderRadius: 12, background: '#FFFFFF', boxShadow: '0 1px 3px rgba(0,0,0,0.05), 0 0 0 1px #E9E8E4' }}
       >
-        {/* 스타일 수정: display: flex와 justifyContent: 'center' 추가 */}
         <div style={{ display: 'flex', justifyContent: 'center', marginBottom: 20 }}>
           <Tabs 
             activeKey={activeTab} 
@@ -149,7 +198,7 @@ export default function RefundTable({
                 key: 'exchange', 
                 label: (
                   <div style={{ display: 'flex', alignItems: 'center', gap: '8px', lineHeight: 'normal' }}>
-                    <span>고객 교환 요청 내역 및 처리</span>
+                    <span>고객 반품 요청 내역 및 처리</span>
                     <Badge count={pendingExchangesTabCount} style={{ backgroundColor: '#52c41a' }} />
                   </div>
                 ) 

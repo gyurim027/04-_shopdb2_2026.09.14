@@ -116,7 +116,7 @@ def reject_refund_request(
     return service.reject_refund_request(db, refund_request_id, auth)
 
 
-# ==================== 교환(Exchange) 관리 엔드포인트 통합 ====================
+# ==================== 반품(Exchange) 관리 엔드포인트 통합 ====================
 
 @router.get("/exchanges")
 def list_exchange_requests(
@@ -124,7 +124,7 @@ def list_exchange_requests(
     db: Session = Depends(get_db),
     auth: AuthContext = Depends(require_admin),
 ):
-    """관리자 교환 요청 목록 조회"""
+    """관리자 반품 요청 목록 조회"""
     return service.list_exchange_requests(db, auth, exchange_status=exchange_status)
 
 
@@ -134,7 +134,7 @@ def approve_exchange_request(
     db: Session = Depends(get_db),
     auth: AuthContext = Depends(require_admin),
 ):
-    """관리자 교환 승인 처리"""
+    """관리자 반품 승인 처리"""
     return service.approve_exchange_request(db, exchange_request_id, auth)
 
 
@@ -144,6 +144,6 @@ def reject_exchange_request(
     db: Session = Depends(get_db),
     auth: AuthContext = Depends(require_admin),
 ):
-    """관리자 교환 반려 처리"""
+    """관리자 반품 반려 처리"""
     return service.reject_exchange_request(db, exchange_request_id, auth)
 
