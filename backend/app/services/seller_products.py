@@ -19,6 +19,7 @@ from app.dependencies.auth import AuthContext
 from app.models.files import FileAsset
 from app.models.products import (
     Category,
+    Inventory,
     Product,
     ProductFile,
     ProductImage,
@@ -361,17 +362,82 @@ def get_product(db: Session, product_id: int, auth: AuthContext) -> Product:
     return product
 
 
-def create_product(db: Session, data: dict, auth: AuthContext) -> Product:
-    product = Product(**data, seller_user_id=auth.user_id)
+def create_product(
+    db: Session,
+    data: dict,
+    auth: AuthContext,
+) -> Product:
+    """상품과 기본 SKU, 초기 재고를 한 번에 생성한다.
+
+    상품만 생성되고 SKU 또는 재고 생성이 실패하는 불완전한 상태를
+    방지하기 위해 세 데이터를 하나의 트랜잭션으로 처리한다.
+    """
+
+    # initial_stock_quantity와 safety_stock은 products 컬럼이 아니므로
+    # Product 객체를 만들기 전에 요청 데이터에서 분리한다.
+    product_data = data.copy()
+
+    initial_stock_quantity = product_data.pop(
+        "initial_stock_quantity",
+        0,
+    )
+
+    safety_stock = product_data.pop(
+        "safety_stock",
+        0,
+    )
+
+    product = Product(
+        **product_data,
+        seller_user_id=auth.user_id,
+    )
+
     db.add(product)
 
     try:
+        # 아직 commit하지 않고 product_id만 먼저 생성한다.
+        db.flush()
+
+        # 옵션이 없는 일반 상품도 재고와 연결될 수 있도록
+        # 상품 등록 시 기본 SKU를 자동으로 만든다.
+        default_variant = ProductVariant(
+            product_id=product.product_id,
+            sku_code=f"SKU-{product.product_code}",
+            option_name1="구매옵션",
+            option_value1="기본상품",
+            option_name2=None,
+            option_value2=None,
+            additional_price=Decimal("0.00"),
+            active_yn="Y",
+        )
+
+        db.add(default_variant)
+        db.flush()
+
+        # 로그인한 셀러의 소속 조직에 해당하는 재고를 생성한다.
+        inventory = Inventory(
+            org_id=auth.org_id,
+            variant_id=default_variant.variant_id,
+            stock_quantity=initial_stock_quantity,
+            reserved_quantity=0,
+            safety_stock=safety_stock,
+        )
+
+        db.add(inventory)
+
+        # 상품, 기본 SKU, 재고가 모두 정상일 때 한 번만 저장한다.
         db.commit()
+
     except IntegrityError as exc:
+        # 세 데이터 중 하나라도 실패하면 모두 저장 전 상태로 되돌린다.
         db.rollback()
-        raise _conflict("이미 존재하는 상품코드입니다.") from exc
+
+        raise _conflict(
+            "이미 존재하는 상품코드 또는 SKU 코드입니다."
+        ) from exc
 
     db.refresh(product)
+
     return product
 
 
@@ -431,17 +497,62 @@ def create_variant(
     data: dict,
     auth: AuthContext,
 ) -> ProductVariant:
-    get_product(db, product_id, auth)
-    variant = ProductVariant(product_id=product_id, **data)
+    """상품 옵션과 해당 옵션의 재고를 함께 생성한다."""
+
+    # 다른 셀러의 상품에 옵션을 등록하지 못하도록 소유권을 확인한다.
+    get_product(
+        db,
+        product_id,
+        auth,
+    )
+
+    # 재고 관련 값은 product_variants 컬럼이 아니므로 분리한다.
+    variant_data = data.copy()
+
+    stock_quantity = variant_data.pop(
+        "stock_quantity",
+        0,
+    )
+
+    safety_stock = variant_data.pop(
+        "safety_stock",
+        0,
+    )
+
+    variant = ProductVariant(
+        product_id=product_id,
+        **variant_data,
+    )
+
     db.add(variant)
 
     try:
+        # inventory가 사용할 variant_id를 먼저 생성한다.
+        db.flush()
+
+        inventory = Inventory(
+            org_id=auth.org_id,
+            variant_id=variant.variant_id,
+            stock_quantity=stock_quantity,
+            reserved_quantity=0,
+            safety_stock=safety_stock,
+        )
+
+        db.add(inventory)
+
+        # 옵션과 재고가 모두 정상적으로 만들어졌을 때 저장한다.
         db.commit()
+
     except IntegrityError as exc:
+        # 옵션 또는 재고 저장이 실패하면 둘 다 취소한다.
         db.rollback()
-        raise _conflict("이미 존재하는 SKU 코드입니다.") from exc
+
+        raise _conflict(
+            "이미 존재하는 SKU 코드이거나 재고를 생성할 수 없습니다."
+        ) from exc
 
     db.refresh(variant)
+
     return variant
 
 

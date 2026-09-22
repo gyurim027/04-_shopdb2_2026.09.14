@@ -1040,3 +1040,160 @@
     flex: 1;
   }
 }
+
+/* -------------------------------------------------------
+   상품 수정 모달: 옵션별 재고
+-------------------------------------------------------- */
+
+.product-edit-inventory-section {
+  min-width: 0;
+  margin-top: 6px;
+  padding-top: 22px;
+  border-top: 1px solid #e6e6e6;
+}
+
+.product-edit-inventory-heading {
+  display: flex;
+  align-items: center;
+  min-height: 28px;
+  margin-bottom: 12px;
+}
+
+.product-edit-inventory-heading h3 {
+  margin: 0;
+  color: #171717;
+  font-size: 18px;
+  font-weight: 700;
+  line-height: 1.4;
+}
+
+/* 공통 상품 테이블과 분리하여 min-width와 스크롤 영향을 받지 않습니다. */
+.product-edit-inventory-table-wrap {
+  overflow: hidden;
+  width: 100%;
+  border: 1px solid #e6e6e6;
+  border-radius: 10px;
+}
+
+.product-edit-inventory-table {
+  width: 100%;
+  min-width: 0;
+  table-layout: fixed;
+  border-collapse: collapse;
+}
+
+.product-edit-inventory-table th,
+.product-edit-inventory-table td {
+  box-sizing: border-box;
+  padding: 11px 10px;
+  vertical-align: middle;
+  border-bottom: 1px solid #ecebea;
+}
+
+.product-edit-inventory-table th {
+  color: #615d59;
+  font-size: 12px;
+  font-weight: 600;
+  line-height: 1.4;
+  white-space: nowrap;
+  background: #f8f8f7;
+}
+
+.product-edit-inventory-table td {
+  height: 58px;
+  color: #31302e;
+  font-size: 13px;
+  background: #ffffff;
+}
+
+.product-edit-inventory-table tbody tr:last-child td {
+  border-bottom: 0;
+}
+
+/* 관리코드는 길어질 수 있으므로 가장 넓게 확보합니다. */
+.product-edit-inventory-table th:first-child,
+.product-edit-inventory-table td:first-child {
+  width: 32%;
+  padding-left: 14px;
+}
+
+/* 나머지 수량 열은 동일한 너비와 정렬을 사용합니다. */
+.product-edit-inventory-table th.is-numeric,
+.product-edit-inventory-table td.is-numeric {
+  width: 17%;
+  text-align: center;
+}
+
+.product-edit-sku-code {
+  display: block;
+  overflow: hidden;
+  font-weight: 600;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.product-edit-quantity,
+.product-edit-available {
+  display: inline-block;
+  min-width: 52px;
+  text-align: center;
+}
+
+.product-edit-available {
+  color: #171717;
+  font-weight: 700;
+}
+
+/* 7자리 숫자가 보이는 정도로 입력칸을 제한합니다. */
+.product-create-grid
+  .product-edit-inventory-table
+  .product-edit-stock-input {
+  display: block;
+  width: 96px;
+  max-width: 100%;
+  min-width: 0;
+  height: 36px;
+  margin: 0 auto;
+  padding: 0 9px;
+  box-sizing: border-box;
+  font-size: 13px;
+  text-align: right;
+  border-radius: 7px;
+}
+
+/* 표 하단에는 정책상 꼭 필요한 안내 한 줄만 남깁니다. */
+.product-edit-inventory-note {
+  display: flex;
+  align-items: flex-start;
+  gap: 6px;
+  margin: 10px 0 0;
+  color: #77726d;
+  font-size: 12px;
+  line-height: 1.5;
+}
+
+.product-edit-inventory-message {
+  height: 72px;
+  color: #77726d;
+  text-align: center;
+}
+
+/* 좁은 화면에서는 관리코드 비중을 조금 줄입니다. */
+@media (max-width: 760px) {
+  .product-edit-inventory-table th:first-child,
+  .product-edit-inventory-table td:first-child {
+    width: 28%;
+  }
+
+  .product-edit-inventory-table th.is-numeric,
+  .product-edit-inventory-table td.is-numeric {
+    width: 18%;
+  }
+
+  .product-create-grid
+    .product-edit-inventory-table
+    .product-edit-stock-input {
+    width: 100%;
+    padding: 0 6px;
+  }
+}

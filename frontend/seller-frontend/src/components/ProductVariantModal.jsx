@@ -7,6 +7,11 @@ import {
   updateSellerProductVariant,
 } from '../services/sellerProductsService'
 
+import {
+  getSellerProductInventories,
+  updateSellerInventory,
+} from '../services/sellerInventoryService'
+
 const initialForm = {
   skuCode: '',
   optionName1: '',
@@ -14,10 +19,21 @@ const initialForm = {
   optionName2: '',
   optionValue2: '',
   additionalPrice: '0',
+
+  // 수정할 실제 inventories 행의 ID입니다.
+  inventoryId: null,
+
+  stockQuantity: '0',
+  reservedQuantity: '0',
+  safetyStock: '0',
 }
 
 function ProductVariantModal({ product, onClose }) {
   const [variants, setVariants] = useState([])
+
+  // 옵션과 연결된 inventories 목록을 별도로 보관합니다.
+  const [inventories, setInventories] = useState([])
+
   const [form, setForm] = useState(initialForm)
 
   // null: 목록만 표시
@@ -37,16 +53,27 @@ function ProductVariantModal({ product, onClose }) {
   const isFormOpen = formMode !== null
   const isProcessing = processingVariantId !== null
 
+  // 현재 입력된 재고에서 예약 재고를 제외하여
+  // 실제 고객에게 판매할 수 있는 수량을 계산합니다.
+  const displayAvailableQuantity = Math.max(
+    Number(form.stockQuantity || 0) -
+      Number(form.reservedQuantity || 0),
+    0,
+  )
+
   async function loadVariants() {
     setIsLoading(true)
     setErrorMessage('')
 
     try {
-      const data = await getSellerProductVariants(
-        product.product_id,
-      )
+      // 옵션 정보와 재고 정보를 같은 시점에 불러옵니다.
+      const [variantData, inventoryData] = await Promise.all([
+        getSellerProductVariants(product.product_id),
+        getSellerProductInventories(product.product_id),
+      ])
 
-      setVariants(data)
+      setVariants(variantData)
+      setInventories(inventoryData)
     } catch (error) {
       setErrorMessage(error.message)
     } finally {
@@ -57,10 +84,14 @@ function ProductVariantModal({ product, onClose }) {
   useEffect(() => {
     let isActive = true
 
-    getSellerProductVariants(product.product_id)
-      .then((data) => {
+    Promise.all([
+      getSellerProductVariants(product.product_id),
+      getSellerProductInventories(product.product_id),
+    ])
+      .then(([variantData, inventoryData]) => {
         if (isActive) {
-          setVariants(data)
+          setVariants(variantData)
+          setInventories(inventoryData)
         }
       })
       .catch((error) => {
@@ -97,6 +128,21 @@ function ProductVariantModal({ product, onClose }) {
   }
 
   function openEditForm(variant) {
+    // 선택한 옵션과 연결된 재고 행을 variant_id로 찾습니다.
+    const inventory = inventories.find(
+      (item) => item.variant_id === variant.variant_id,
+    )
+
+    // 기존 데이터 중 inventories 행이 없는 옵션은
+    // 잘못된 0개 재고를 보여주지 않고 먼저 보정하도록 안내합니다.
+    if (!inventory) {
+      setErrorMessage(
+        '이 옵션에 연결된 재고 정보가 없습니다. 기존 재고 데이터 보정이 필요합니다.',
+      )
+      setSuccessMessage('')
+      return
+    }
+
     setFormMode('edit')
     setEditingVariantId(variant.variant_id)
     setErrorMessage('')
@@ -109,6 +155,11 @@ function ProductVariantModal({ product, onClose }) {
       optionName2: variant.option_name2 ?? '',
       optionValue2: variant.option_value2 ?? '',
       additionalPrice: String(variant.additional_price ?? 0),
+
+      inventoryId: inventory.inventory_id,
+      stockQuantity: String(inventory.stock_quantity),
+      reservedQuantity: String(inventory.reserved_quantity),
+      safetyStock: String(inventory.safety_stock),
     })
   }
 
@@ -130,6 +181,9 @@ function ProductVariantModal({ product, onClose }) {
     }
 
     const additionalPrice = Number(form.additionalPrice)
+    const stockQuantity = Number(form.stockQuantity)
+    const reservedQuantity = Number(form.reservedQuantity)
+    const safetyStock = Number(form.safetyStock)
 
     if (
       form.additionalPrice === '' ||
@@ -139,36 +193,102 @@ function ProductVariantModal({ product, onClose }) {
       return
     }
 
+    // 신규 등록과 수정 모두 재고 입력값을 검사합니다.
+    if (
+      form.stockQuantity === '' ||
+      form.safetyStock === '' ||
+      !Number.isInteger(stockQuantity) ||
+      !Number.isInteger(safetyStock) ||
+      stockQuantity < 0 ||
+      safetyStock < 0
+    ) {
+      setErrorMessage(
+        '현재 재고와 안전 재고는 0 이상의 정수로 입력해 주세요.',
+      )
+      return
+    }
+
+    // 주문에 이미 할당된 수량보다 재고를 작게 줄일 수 없습니다.
+    if (
+      isEditMode &&
+      stockQuantity < reservedQuantity
+    ) {
+      setErrorMessage(
+        `현재 재고는 예약 재고 ${reservedQuantity}개보다 작게 설정할 수 없습니다.`,
+      )
+      return
+    }
+
+    if (isEditMode && !form.inventoryId) {
+      setErrorMessage(
+        '수정할 재고 정보를 찾을 수 없습니다.',
+      )
+      return
+    }
+
     setIsSaving(true)
 
     try {
       if (isEditMode) {
-        await updateSellerProductVariant(editingVariantId, {
-          option_name1: form.optionName1.trim() || null,
-          option_value1: form.optionValue1.trim() || null,
-          option_name2: form.optionName2.trim() || null,
-          option_value2: form.optionValue2.trim() || null,
-          additional_price: additionalPrice,
-        })
+        // 옵션 정보와 같은 SKU의 재고를 함께 수정합니다.
+        await Promise.all([
+          updateSellerProductVariant(
+            editingVariantId,
+            {
+              option_name1:
+                form.optionName1.trim() || null,
+              option_value1:
+                form.optionValue1.trim() || null,
+              option_name2:
+                form.optionName2.trim() || null,
+              option_value2:
+                form.optionValue2.trim() || null,
+              additional_price: additionalPrice,
+            },
+          ),
 
-        setSuccessMessage('옵션이 수정되었습니다.')
+          updateSellerInventory(
+            form.inventoryId,
+            {
+              stock_quantity: stockQuantity,
+              safety_stock: safetyStock,
+            },
+          ),
+        ])
+
+        setSuccessMessage(
+          '옵션 정보와 재고가 수정되었습니다.',
+        )
       } else {
-        await createSellerProductVariant(product.product_id, {
-          sku_code: form.skuCode.trim(),
-          option_name1: form.optionName1.trim() || null,
-          option_value1: form.optionValue1.trim() || null,
-          option_name2: form.optionName2.trim() || null,
-          option_value2: form.optionValue2.trim() || null,
-          additional_price: additionalPrice,
-        })
+        // 새 옵션과 해당 옵션의 inventories 행을 함께 생성합니다.
+        await createSellerProductVariant(
+          product.product_id,
+          {
+            sku_code: form.skuCode.trim(),
+            option_name1:
+              form.optionName1.trim() || null,
+            option_value1:
+              form.optionValue1.trim() || null,
+            option_name2:
+              form.optionName2.trim() || null,
+            option_value2:
+              form.optionValue2.trim() || null,
+            additional_price: additionalPrice,
+            stock_quantity: stockQuantity,
+            safety_stock: safetyStock,
+          },
+        )
 
-        setSuccessMessage('새 옵션이 추가되었습니다.')
+        setSuccessMessage(
+          '새 옵션과 초기 재고가 추가되었습니다.',
+        )
       }
 
       setFormMode(null)
       setEditingVariantId(null)
       setForm(initialForm)
 
+      // 수정된 옵션과 재고를 서버에서 다시 조회합니다.
       await loadVariants()
     } catch (error) {
       setErrorMessage(error.message)
@@ -355,6 +475,79 @@ function ProductVariantModal({ product, onClose }) {
               </label>
 
               <label>
+                <span>
+                  {isEditMode ? '현재 재고 *' : '초기 재고 *'}
+                </span>
+
+                <input
+                  type="number"
+                  name="stockQuantity"
+                  min="0"
+                  step="1"
+                  value={form.stockQuantity}
+                  onChange={handleChange}
+                  placeholder="0"
+                />
+
+                <small className="variant-field-help">
+                  {isEditMode
+                    ? '현재 보유 중인 전체 재고입니다.'
+                    : '이 옵션으로 판매할 수 있는 최초 수량입니다.'}
+                </small>
+              </label>
+
+              <label>
+                <span>안전 재고 *</span>
+
+                <input
+                  type="number"
+                  name="safetyStock"
+                  min="0"
+                  step="1"
+                  value={form.safetyStock}
+                  onChange={handleChange}
+                  placeholder="0"
+                />
+
+                <small className="variant-field-help">
+                  판매 가능 재고가 이 수량 이하이면 재고 부족으로 표시합니다.
+                </small>
+              </label>
+
+              {isEditMode && (
+                <>
+                  <label>
+                    <span>예약 재고</span>
+
+                    <input
+                      type="number"
+                      value={form.reservedQuantity}
+                      disabled
+                    />
+
+                    <small className="variant-field-help">
+                      접수된 주문에 할당되어 수정할 수 없는 수량입니다.
+                    </small>
+                  </label>
+
+                  <label>
+                    <span>판매 가능 재고</span>
+
+                    <input
+                      type="number"
+                      value={displayAvailableQuantity}
+                      disabled
+                    />
+
+                    <small className="variant-field-help">
+                      현재 재고에서 예약 재고를 제외한 수량입니다.
+                    </small>
+                  </label>
+                </>
+              )}
+
+
+              <label>
                 <span>옵션명 1</span>
 
                 <input
@@ -436,6 +629,7 @@ function ProductVariantModal({ product, onClose }) {
                 <th>옵션 1</th>
                 <th>옵션 2</th>
                 <th>추가금액</th>
+                <th>현재 재고</th>
                 <th>상태</th>
                 <th>관리</th>
               </tr>
@@ -445,10 +639,10 @@ function ProductVariantModal({ product, onClose }) {
               {isLoading && (
                 <tr>
                   <td
-                    colSpan="6"
+                    colSpan="7"
                     className="products-table-message"
                   >
-                    옵션을 불러오는 중입니다.
+                    옵션과 재고를 불러오는 중입니다.
                   </td>
                 </tr>
               )}
@@ -456,7 +650,7 @@ function ProductVariantModal({ product, onClose }) {
               {!isLoading && variants.length === 0 && (
                 <tr>
                   <td
-                    colSpan="6"
+                    colSpan="7"
                     className="products-table-message"
                   >
                     등록된 옵션이 없습니다.
@@ -465,111 +659,134 @@ function ProductVariantModal({ product, onClose }) {
               )}
 
               {!isLoading &&
-                variants.map((variant) => (
-                  <tr
-                    className={[
-                      editingVariantId === variant.variant_id
-                        ? 'is-editing'
-                        : '',
-                      variant.active_yn !== 'Y'
-                        ? 'is-inactive'
-                        : '',
-                    ]
-                      .filter(Boolean)
-                      .join(' ')}
-                    key={variant.variant_id}
-                  >
-                    <td>{variant.sku_code}</td>
+                variants.map((variant) => {
+                  // 옵션의 variant_id와 같은 재고 행을 찾습니다.
+                  const inventory = inventories.find(
+                    (item) =>
+                      item.variant_id === variant.variant_id,
+                  )
 
-                    <td>
-                      {variant.option_name1
-                        ? `${variant.option_name1}: ${
-                            variant.option_value1 ?? '—'
-                          }`
-                        : '—'}
-                    </td>
+                  return (
+                    <tr
+                      className={[
+                        editingVariantId === variant.variant_id
+                          ? 'is-editing'
+                          : '',
+                        variant.active_yn !== 'Y'
+                          ? 'is-inactive'
+                          : '',
+                      ]
+                        .filter(Boolean)
+                        .join(' ')}
+                      key={variant.variant_id}
+                    >
+                      <td>{variant.sku_code}</td>
 
-                    <td>
-                      {variant.option_name2
-                        ? `${variant.option_name2}: ${
-                            variant.option_value2 ?? '—'
-                          }`
-                        : '—'}
-                    </td>
+                      <td>
+                        {variant.option_name1
+                          ? `${variant.option_name1}: ${
+                              variant.option_value1 ?? '—'
+                            }`
+                          : '—'}
+                      </td>
 
-                    <td>
-                      {Number(
-                        variant.additional_price ?? 0,
-                      ).toLocaleString('ko-KR')}
-                      원
-                    </td>
+                      <td>
+                        {variant.option_name2
+                          ? `${variant.option_name2}: ${
+                              variant.option_value2 ?? '—'
+                            }`
+                          : '—'}
+                      </td>
 
-                    <td>
-                      <span
-                        className={
-                          variant.active_yn === 'Y'
-                            ? 'variant-status is-active'
-                            : 'variant-status is-inactive'
-                        }
-                      >
-                        {variant.active_yn === 'Y'
-                          ? '사용 중'
-                          : '비활성'}
-                      </span>
-                    </td>
+                      <td>
+                        {Number(
+                          variant.additional_price ?? 0,
+                        ).toLocaleString('ko-KR')}
+                        원
+                      </td>
 
-                    <td>
-                      <div className="variant-row-actions">
-                        {variant.active_yn === 'Y' ? (
-                          <>
+                      <td>
+                        {inventory ? (
+                          <strong>
+                            {Number(
+                              inventory.stock_quantity,
+                            ).toLocaleString('ko-KR')}
+                            개
+                          </strong>
+                        ) : (
+                          <span>정보 없음</span>
+                        )}
+                      </td>
+
+                      <td>
+                        <span
+                          className={
+                            variant.active_yn === 'Y'
+                              ? 'variant-status is-active'
+                              : 'variant-status is-inactive'
+                          }
+                        >
+                          {variant.active_yn === 'Y'
+                            ? '사용 중'
+                            : '비활성'}
+                        </span>
+                      </td>
+
+                      <td>
+                        <div className="variant-row-actions">
+                          {variant.active_yn === 'Y' ? (
+                            <>
+                              <button
+                                className="product-edit-button"
+                                type="button"
+                                disabled={
+                                  isSaving || isProcessing
+                                }
+                                onClick={() =>
+                                  openEditForm(variant)
+                                }
+                              >
+                                수정
+                              </button>
+
+                              <button
+                                className="variant-deactivate-button"
+                                type="button"
+                                disabled={
+                                  isSaving || isProcessing
+                                }
+                                onClick={() =>
+                                  handleDeactivate(variant)
+                                }
+                              >
+                                {processingVariantId ===
+                                variant.variant_id
+                                  ? '처리 중'
+                                  : '비활성화'}
+                              </button>
+                            </>
+                          ) : (
                             <button
-                              className="product-edit-button"
+                              className="variant-reactivate-button"
                               type="button"
                               disabled={
                                 isSaving || isProcessing
                               }
                               onClick={() =>
-                                openEditForm(variant)
-                              }
-                            >
-                              수정
-                            </button>
-
-                            <button
-                              className="variant-deactivate-button"
-                              type="button"
-                              disabled={
-                                isSaving || isProcessing
-                              }
-                              onClick={() =>
-                                handleDeactivate(variant)
+                                handleReactivate(variant)
                               }
                             >
                               {processingVariantId ===
                               variant.variant_id
                                 ? '처리 중'
-                                : '비활성화'}
+                                : '재활성화'}
                             </button>
-                          </>
-                        ) : (
-                          <button
-                            className="variant-reactivate-button"
-                            type="button"
-                            disabled={isSaving || isProcessing}
-                            onClick={() =>
-                              handleReactivate(variant)
-                            }
-                          >
-                            {processingVariantId ===
-                            variant.variant_id
-                              ? '처리 중'
-                              : '재활성화'}
-                          </button>
-                        )}
-                      </div>
-                    </td>
-                  </tr>
-                ))}
+                          )}
+                        </div>
+                      </td>
+                    </tr>
+                  )
+                })}
             </tbody>
           </table>
         </div>

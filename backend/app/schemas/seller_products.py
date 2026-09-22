@@ -51,19 +51,37 @@ class SellerCategoryOut(BaseModel):
 
 
 class SellerProductCreate(BaseModel):
-    """셀러 상품 등록 요청."""
+    """셀러 상품 등록 요청.
+
+    상품 등록 시 기본 SKU와 초기 재고도 함께 생성한다.
+    재고 값은 products가 아니라 inventories 테이블에 저장된다.
+    """
 
     category_id: int
     product_code: str = Field(..., max_length=50)
     product_name: str = Field(..., max_length=200)
+
     short_description: str | None = Field(
         default=None,
         max_length=1000,
     )
+
     description: str | None = None
     regular_price: Decimal
     sale_price: Decimal
     product_status: str = "READY"
+
+    initial_stock_quantity: int = Field(
+        default=0,
+        ge=0,
+        description="상품 등록 시 설정할 초기 재고 수량",
+    )
+
+    safety_stock: int = Field(
+        default=0,
+        ge=0,
+        description="안전재고 수량",
+    )
 
 
 class SellerProductUpdate(BaseModel):
@@ -118,27 +136,46 @@ class SellerProductPage(BaseModel):
 
 
 class SellerVariantCreate(BaseModel):
-    """상품 옵션 등록 요청."""
+    """상품 옵션과 해당 옵션의 초기 재고 등록 요청."""
 
-    sku_code: str = Field(..., max_length=100)
+    sku_code: str = Field(
+        ...,
+        max_length=100,
+    )
+
     option_name1: str | None = Field(
         default=None,
         max_length=100,
     )
+
     option_value1: str | None = Field(
         default=None,
         max_length=100,
     )
+
     option_name2: str | None = Field(
         default=None,
         max_length=100,
     )
+
     option_value2: str | None = Field(
         default=None,
         max_length=100,
     )
+
     additional_price: Decimal = Decimal("0.00")
 
+    stock_quantity: int = Field(
+        default=0,
+        ge=0,
+        description="옵션의 초기 재고 수량",
+    )
+
+    safety_stock: int = Field(
+        default=0,
+        ge=0,
+        description="옵션의 안전재고 수량",
+    )
 
 class SellerVariantUpdate(BaseModel):
     """상품 옵션 수정 요청.
