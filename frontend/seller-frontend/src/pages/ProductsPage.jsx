@@ -27,6 +27,10 @@ const initialCreateForm = {
   regularPrice: '',
   salePrice: '',
   productStatus: 'READY',
+
+  // 상품 등록과 동시에 생성되는 기본 옵션의 재고입니다.
+  initialStockQuantity: '0',
+  safetyStock: '0',
 }
 
 function formatCurrency(value) {
@@ -169,6 +173,10 @@ function ProductsPage() {
 
     const regularPrice = Number(createForm.regularPrice)
     const salePrice = Number(createForm.salePrice)
+    const initialStockQuantity = Number(
+      createForm.initialStockQuantity,
+    )
+    const safetyStock = Number(createForm.safetyStock)
 
     if (
       !createForm.categoryId ||
@@ -200,7 +208,33 @@ function ProductsPage() {
       return
     }
 
-    setIsCreating(true)
+    // 재고 수량은 소수나 음수를 허용하지 않습니다.
+    if (
+      createForm.initialStockQuantity === '' ||
+      createForm.safetyStock === '' ||
+      !Number.isInteger(initialStockQuantity) ||
+      !Number.isInteger(safetyStock) ||
+      initialStockQuantity < 0 ||
+      safetyStock < 0
+    ) {
+      setCreateErrorMessage(
+        '초기 재고와 안전 재고는 0 이상의 정수로 입력해 주세요.',
+      )
+      return
+    }
+
+    // 판매중 상품을 재고 0개로 등록해 바로 품절되는 상황을 방지합니다.
+    if (
+      createForm.productStatus === 'SALE' &&
+      initialStockQuantity === 0
+    ) {
+      setCreateErrorMessage(
+        '판매중 상품은 초기 재고를 1개 이상 입력해 주세요.',
+      )
+      return
+    }
+
+setIsCreating(true)
 
     try {
       const createdProduct = await createSellerProduct({
@@ -213,6 +247,10 @@ function ProductsPage() {
         regular_price: regularPrice,
         sale_price: salePrice,
         product_status: createForm.productStatus,
+
+        // 백엔드에서 기본 SKU와 inventories 행을 만들 때 사용합니다.
+        initial_stock_quantity: initialStockQuantity,
+        safety_stock: safetyStock,
       })
 
       setIsCreateOpen(false)
@@ -436,6 +474,42 @@ function ProductsPage() {
                   onChange={handleCreateChange}
                   placeholder="0"
                 />
+              </label>
+
+              <label>
+                <span>초기 재고 *</span>
+
+                <input
+                  type="number"
+                  name="initialStockQuantity"
+                  min="0"
+                  step="1"
+                  value={createForm.initialStockQuantity}
+                  onChange={handleCreateChange}
+                  placeholder="0"
+                />
+
+                <small>
+                  옵션이 없는 기본 상품의 최초 재고입니다.
+                </small>
+              </label>
+
+              <label>
+                <span>안전 재고 *</span>
+
+                <input
+                  type="number"
+                  name="safetyStock"
+                  min="0"
+                  step="1"
+                  value={createForm.safetyStock}
+                  onChange={handleCreateChange}
+                  placeholder="0"
+                />
+
+                <small>
+                  판매 가능 재고가 이 수량 이하이면 재고 부족으로 표시합니다.
+                </small>
               </label>
 
               <label className="product-create-wide">
