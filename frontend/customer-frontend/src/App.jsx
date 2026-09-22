@@ -1,4 +1,4 @@
-import { Route, Routes } from 'react-router-dom'
+import { Navigate, Route, Routes } from 'react-router-dom'
 import Layout from './components/Layout'
 import ProtectedRoute from './components/ProtectedRoute'
 import HomePage from './pages/HomePage'
@@ -14,7 +14,7 @@ import OrdersPage from './pages/OrdersPage'
 import OrderDetailPage from './pages/OrderDetailPage'
 import DeliveryTrackingPage from './pages/DeliveryTrackingPage'
 import RefundsPage from './pages/RefundsPage'
-import ReturnsPage from './pages/ReturnsPage'
+import RefundDetailPage from './pages/RefundDetailPage'
 import ReturnDetailPage from './pages/ReturnDetailPage'
 import SupportPage from './pages/SupportPage'
 import InquiryDetailPage from './pages/InquiryDetailPage'
@@ -41,7 +41,8 @@ export default function App() {
         <Route path="orders/:orderId" element={<P><OrderDetailPage /></P>} />
         <Route path="orders/:orderId/tracking" element={<P><DeliveryTrackingPage /></P>} />
         <Route path="refunds" element={<P><RefundsPage /></P>} />
-        <Route path="returns" element={<P><ReturnsPage /></P>} />
+        <Route path="refunds/:refundRequestId" element={<P><RefundDetailPage /></P>} />
+        <Route path="returns" element={<P><Navigate to="/refunds?mode=return" replace /></P>} />
         <Route path="returns/:returnRequestId" element={<P><ReturnDetailPage /></P>} />
         <Route path="support" element={<P><SupportPage /></P>} />
         <Route path="support/:inquiryId" element={<P><InquiryDetailPage /></P>} />

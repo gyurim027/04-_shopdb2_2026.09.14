@@ -215,8 +215,7 @@ export default function Layout() {
             <NavLink to="/products?discount=1&sort=discount">할인상품</NavLink>
             <NavLink to="/cart">장바구니</NavLink>
             <NavLink to="/orders">주문조회</NavLink>
-            <NavLink to="/refunds">취소/환불</NavLink>
-            <NavLink to="/returns">반품</NavLink>
+            <NavLink to="/refunds">환불/반품</NavLink>
             <NavLink to="/support">고객센터</NavLink>
             <NavLink to="/policies">이용정책</NavLink>
             <NavLink to="/ai" className="quiet-ai-link"><Bot size={15} /> 쇼핑도우미</NavLink>
@@ -290,8 +289,7 @@ export default function Layout() {
           <Link to="/support">고객센터</Link>
           <Link to="/cart">장바구니</Link>
           <Link to="/orders">주문조회</Link>
-          <Link to="/refunds">취소/환불</Link>
-          <Link to="/returns">반품</Link>
+          <Link to="/refunds">환불/반품</Link>
         </div>
         <div className="container footer-company-row">
           <div className="brand footer-brand"><span>SHOP</span><b>DB</b></div>

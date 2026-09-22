@@ -886,3 +886,44 @@ body{background:#fff;color:var(--commerce-ink)}
   .detail-purchase-actions{grid-template-columns:1fr}.product-detail-page .cart-add-button,.product-detail-page .buy-button{width:100%}
   .cart-item-row{padding:14px 12px;gap:10px}.cart-thumb{width:68px;height:68px;flex-basis:68px}.item-check{margin-top:17px}.cart-product-link{gap:10px}.cart-product-copy strong{font-size:12px}.cart-product-copy span{font-size:10px}.cart-item-controls{align-items:center}.cart-qty-control{height:30px}.cart-item-controls>strong{font-size:13px}.cart-seller-head{padding:0 12px}.cart-seller-head>b{font-size:11px}.cart-checkout-order-head,.cart-checkout-order-foot{padding-left:12px;padding-right:12px}.cart-checkout-order-foot{align-items:flex-start;flex-direction:column}.cart-checkout-order-foot>div{width:100%;justify-content:space-between}.return-created-notice{align-items:flex-start;flex-direction:column}.return-created-links{width:100%}
 }
+
+/* unified refund / return entry */
+.refund-return-page-title{margin-bottom:18px}
+.refund-return-tabs{display:grid;grid-template-columns:repeat(2,minmax(0,1fr));gap:12px;max-width:620px;margin:0 0 28px}
+.refund-return-tab{min-height:68px;border:1px solid #d8dee8;border-radius:10px;background:#fff;color:#445064;padding:12px 16px;display:flex;align-items:center;gap:11px;text-align:left;cursor:pointer;transition:.16s ease}
+.refund-return-tab>svg{color:#64748b;flex:0 0 auto}
+.refund-return-tab>span{display:flex;flex-direction:column;gap:2px}
+.refund-return-tab strong{font-size:15px;color:#172033}
+.refund-return-tab small{font-size:11px;color:#8290a2;font-weight:500}
+.refund-return-tab:hover{border-color:#9bb8f7;background:#f8fbff}
+.refund-return-tab.active{border-color:#346aff;background:#edf4ff;box-shadow:0 0 0 1px rgba(52,106,255,.08)}
+.refund-return-tab.active>svg,.refund-return-tab.active strong{color:#2563eb}
+.refund-return-embedded .return-form{margin-top:0}
+@media(max-width:560px){.refund-return-tabs{grid-template-columns:1fr;gap:8px}.refund-return-tab{min-height:58px}}
+
+/* 2026-09-22 refund / return order-history integration */
+.order-action-btn.danger{border-color:#f1b7b7;color:#c62828;background:#fff}
+.order-action-btn.danger:hover{border-color:#dc2626;background:#fff7f7}
+.request-history-card{border-color:#cfdaf7}
+.request-history-card.is-refund{box-shadow:0 2px 8px rgba(37,99,235,.06)}
+.request-history-card.is-return{box-shadow:0 2px 8px rgba(14,116,144,.06)}
+.request-history-status strong{color:#245ee7}
+.request-history-card.is-return .request-history-status strong{color:#0f7895}
+.request-history-status span{font-weight:600}
+.refund-guide-disabled{margin-top:12px;padding:9px 10px;background:#f8fafc;color:#7a8796;font-size:11px;line-height:1.5;text-align:center;border:1px solid #edf0f3}
+
+
+/* Refund / return request detail navigation */
+.refund-card-link{cursor:pointer;transition:.16s ease;color:inherit}
+.refund-card-link:hover{border-color:#aac2f2;box-shadow:0 7px 20px rgba(15,23,42,.05);transform:translateY(-1px)}
+.refund-card-right{display:flex!important;align-items:flex-end!important;gap:5px!important}
+.refund-card-detail-link,.return-card-detail-link{display:inline-flex;align-items:center;gap:3px;color:#2563eb!important;font-size:11px!important;font-weight:700}
+.return-card-detail-link{margin-left:auto;white-space:nowrap;align-self:center}
+.refund-detail-page .return-progress{grid-template-columns:repeat(4,minmax(0,1fr))}
+.compact-refund-detail-empty{padding:26px 18px;margin-top:8px}
+@media(max-width:560px){
+  .refund-card-link{align-items:flex-start;gap:12px}
+  .refund-card-right{min-width:104px}
+  .return-card-detail-link{margin-left:0;align-self:flex-start}
+  .refund-detail-page .return-progress{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}
+}

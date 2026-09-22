@@ -158,7 +158,7 @@ export default function HomePage() {
         <Link to="/products"><ShoppingBag /><span>전체상품</span></Link>
         <Link to="/products?discount=1&sort=discount"><Tag /><span>할인상품</span></Link>
         <Link to="/orders"><PackageSearch /><span>주문조회</span></Link>
-        <Link to="/refunds"><CircleHelp /><span>취소/환불</span></Link>
+        <Link to="/refunds"><CircleHelp /><span>환불/반품</span></Link>
         <Link to="/support"><Headphones /><span>고객센터</span></Link>
         <Link to="/policies"><FileText /><span>이용정책</span></Link>
       </section>

@@ -6,7 +6,6 @@ import {
   Headphones,
   MapPin,
   RefreshCcw,
-  RotateCcw,
   ShoppingCart,
   UserRound,
 } from 'lucide-react'
@@ -84,8 +83,7 @@ export default function MyPage() {
     { to: '/cart', icon: ShoppingCart, title: '장바구니', text: '판매사별 상품 선택·수량 변경·주문' },
     { to: '/orders', icon: ClipboardList, title: '주문내역', text: '주문 상태와 상세 정보 확인' },
     { to: '/addresses', icon: MapPin, title: '배송지 관리', text: '배송지 등록·수정·삭제' },
-    { to: '/refunds', icon: RefreshCcw, title: '취소/환불', text: '환불 요청 및 처리상태 확인' },
-    { to: '/returns', icon: RotateCcw, title: '반품', text: '배송완료 상품의 반품 신청·상태 확인' },
+    { to: '/refunds', icon: RefreshCcw, title: '환불/반품', text: '환불·반품 신청 및 처리상태 확인' },
     { to: '/support', icon: Headphones, title: '고객센터', text: '1:1 문의와 답변 확인' },
     { to: '/ai', icon: Bot, title: 'AI 도우미', text: '상품·정책 관련 질문하기' },
   ]
@@ -102,8 +100,8 @@ export default function MyPage() {
 
       <div className="mypage-stats">
         <Link to="/orders"><span>전체 주문</span><strong>{loading ? '-' : stats.orders}</strong><small>건</small></Link>
-        <Link to="/refunds"><span>환불 요청</span><strong>{loading ? '-' : stats.refunds}</strong><small>건</small></Link>
-        <Link to="/returns"><span>반품 요청</span><strong>{loading ? '-' : stats.returns}</strong><small>건</small></Link>
+        <Link to="/refunds?mode=refund"><span>환불 요청</span><strong>{loading ? '-' : stats.refunds}</strong><small>건</small></Link>
+        <Link to="/refunds?mode=return"><span>반품 요청</span><strong>{loading ? '-' : stats.returns}</strong><small>건</small></Link>
         <Link to="/support"><span>1:1 문의</span><strong>{loading ? '-' : stats.inquiries}</strong><small>건</small></Link>
       </div>
 

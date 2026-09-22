@@ -14,6 +14,7 @@ import { customerApi } from '../api/customer'
 import { resolveMediaUrl } from '../api/client'
 import { useToast } from '../context/ToastContext'
 import { ORDER_STATUS_LABELS, statusLabel } from '../utils/status'
+import { buildClaimedQuantityMap, hasRemainingItems } from '../utils/refundReturn'
 
 const money = (v) => Number(v || 0).toLocaleString('ko-KR')
 const date = (v) => v ? new Date(v).toLocaleString('ko-KR') : '-'
@@ -38,7 +39,23 @@ function productImageFromDetail(product) {
 
   const images = Array.isArray(product.images) ? product.images : []
   const main = images.find((image) => image.image_type === 'MAIN') || images[0]
-  return resolveMediaUrl(main?.public_url || main?.thumbnail_url)
+  return resolveMediaUrl(main?.content_url || main?.public_url || main?.thumbnail_url)
+}
+
+function requestAction(status = '', orderId) {
+  if (status === 'PAID' || status === 'PREPARING') {
+    return { label: '주문취소', to: `/refunds?mode=refund&orderId=${orderId}` }
+  }
+
+  if (['SHIPPING', 'SHIPPED', 'IN_TRANSIT'].includes(status)) {
+    return { label: '주문 · 배송 취소', to: `/refunds?mode=refund&orderId=${orderId}` }
+  }
+
+  if (status === 'DELIVERED') {
+    return { label: '환불/반품 신청', to: `/refunds?orderId=${orderId}` }
+  }
+
+  return null
 }
 
 function OrderProductThumb({ src, name }) {
@@ -66,6 +83,7 @@ export default function OrderDetailPage() {
   const [order, setOrder] = useState(null)
   const [payment, setPayment] = useState(null)
   const [productMeta, setProductMeta] = useState({})
+  const [claimedQuantityMap, setClaimedQuantityMap] = useState({})
   const [error, setError] = useState('')
   const [loading, setLoading] = useState(true)
   const [busy, setBusy] = useState(false)
@@ -76,8 +94,22 @@ export default function OrderDetailPage() {
     setProductMeta({})
 
     try {
-      const nextOrder = await customerApi.getOrder(orderId)
+      const [nextOrder, refundData, returnData] = await Promise.all([
+        customerApi.getOrder(orderId),
+        customerApi.getRefunds({ size: 100 }),
+        customerApi.getReturns({ size: 100 }),
+      ])
+
       setOrder(nextOrder)
+
+      const refundList = refundData?.items || []
+      const returnList = returnData?.items || []
+      const [refundDetails, returnDetails] = await Promise.all([
+        Promise.all(refundList.map((request) => customerApi.getRefund(request.refund_request_id))),
+        Promise.all(returnList.map((request) => customerApi.getReturn(request.return_request_id))),
+      ])
+
+      setClaimedQuantityMap(buildClaimedQuantityMap(refundDetails, returnDetails))
 
       const productIds = [...new Set(
         (nextOrder.items || [])
@@ -139,6 +171,8 @@ export default function OrderDetailPage() {
 
   const canPay = order ? !['PAID', 'COMPLETED', 'CANCELLED', 'REFUNDED', 'DELIVERED'].includes(order.order_status) : false
   const currentStep = useMemo(() => statusStep(order?.order_status), [order?.order_status])
+  const hasRemaining = useMemo(() => hasRemainingItems(order, claimedQuantityMap), [order, claimedQuantityMap])
+  const action = order && hasRemaining ? requestAction(order.order_status, order.order_id) : null
 
   if (loading) return <div className="container page-section"><div className="loading-box">주문정보를 불러오는 중...</div></div>
   if (!order) return <div className="container page-section"><div className="notice error retry-notice">{error || '주문 정보를 찾을 수 없습니다.'}<button type="button" onClick={load}><RotateCcw size={14} /> 다시 시도</button></div></div>
@@ -222,9 +256,12 @@ export default function OrderDetailPage() {
           ) : (
             <div className="paid-mark"><CheckCircle2 size={17} /> 결제 또는 주문 처리가 완료된 상태입니다.</div>
           )}
-          <Link className="refund-guide-link" to="/refunds">환불이 필요하신가요? 환불 요청으로 이동</Link>
-          {['DELIVERED', 'COMPLETED'].includes(order.order_status) && (
-            <Link className="return-guide-link" to={`/returns?orderId=${order.order_id}`}>배송받은 상품을 돌려보내시나요? 반품 신청으로 이동</Link>
+
+          {action && <Link className="refund-guide-link" to={action.to}>{action.label}</Link>}
+          {order.order_status === 'COMPLETED' ? (
+            <div className="refund-guide-disabled">구매확정된 주문은 환불/반품 신청 버튼을 표시하지 않습니다.</div>
+          ) : (
+            !action && !hasRemaining && <div className="refund-guide-disabled">환불/반품 신청 가능한 남은 수량이 없습니다.</div>
           )}
         </section>
       </div>

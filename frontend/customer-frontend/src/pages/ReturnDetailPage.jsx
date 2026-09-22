@@ -98,7 +98,7 @@ export default function ReturnDetailPage() {
 
   return (
     <div className="container page-section return-detail-page">
-      <Link className="back-link" to="/returns"><ChevronLeft size={16} /> 반품 목록으로</Link>
+      <Link className="back-link" to="/refunds?mode=return"><ChevronLeft size={16} /> 반품 목록으로</Link>
 
       <div className="page-title return-detail-title">
         <span>RETURN DETAIL</span>
@@ -178,7 +178,7 @@ export default function ReturnDetailPage() {
 
       <div className="return-detail-actions">
         <Link className="btn btn-light" to={`/orders/${detail.order_id}`}>주문 상세보기</Link>
-        <Link className="btn btn-primary" to="/returns">반품 목록으로</Link>
+        <Link className="btn btn-primary" to="/refunds?mode=return">반품 목록으로</Link>
       </div>
     </div>
   )

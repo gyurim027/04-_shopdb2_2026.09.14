@@ -8,13 +8,14 @@ export const ORDER_STATUS_LABELS = {
   SHIPPING: '배송중',
   SHIPPED: '배송중',
   DELIVERED: '배송완료',
-  COMPLETED: '구매완료',
+  COMPLETED: '구매확정',
   CANCELLED: '주문취소',
   REFUNDED: '환불완료',
 }
 
 export const REFUND_STATUS_LABELS = {
   REQUESTED: '환불접수',
+  REVIEWING: '환불검토중',
   APPROVED: '환불승인',
   REJECTED: '환불거절',
   COMPLETED: '환불완료',

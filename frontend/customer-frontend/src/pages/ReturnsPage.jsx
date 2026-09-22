@@ -3,7 +3,12 @@ import { AlertCircle, ChevronRight, PackageCheck, RotateCcw, Truck } from 'lucid
 import { Link, useNavigate, useSearchParams } from 'react-router-dom'
 import { customerApi } from '../api/customer'
 import { useToast } from '../context/ToastContext'
-import { RETURN_STATUS_LABELS, statusLabel } from '../utils/status'
+import { ORDER_STATUS_LABELS, RETURN_STATUS_LABELS, statusLabel } from '../utils/status'
+import {
+  buildClaimedQuantityMap,
+  getRemainingQuantity,
+  hasRemainingItems,
+} from '../utils/refundReturn'
 
 const REASONS = [
   { code: 'CHANGE_OF_MIND', label: '단순 변심' },
@@ -22,12 +27,14 @@ const PICKUP_METHODS = [
 const money = (value) => Number(value || 0).toLocaleString('ko-KR')
 const date = (value) => value ? new Date(value).toLocaleString('ko-KR') : '-'
 
-export default function ReturnsPage() {
+export default function ReturnsPage({ embedded = false }) {
   const navigate = useNavigate()
   const [searchParams] = useSearchParams()
   const { showToast } = useToast()
   const [returns, setReturns] = useState([])
   const [orders, setOrders] = useState([])
+  const [orderDetails, setOrderDetails] = useState({})
+  const [claimedQuantityMap, setClaimedQuantityMap] = useState({})
   const [orderId, setOrderId] = useState(searchParams.get('orderId') || '')
   const [order, setOrder] = useState(null)
   const [selected, setSelected] = useState({})
@@ -43,13 +50,33 @@ export default function ReturnsPage() {
   const load = async () => {
     setLoading(true)
     setError('')
+
     try {
-      const [returnData, orderData] = await Promise.all([
+      const [returnData, refundData, orderData] = await Promise.all([
         customerApi.getReturns({ size: 100 }),
+        customerApi.getRefunds({ size: 100 }),
         customerApi.getOrders({ size: 100 }),
       ])
-      setReturns(returnData?.items || [])
-      setOrders(orderData?.items || [])
+
+      const returnList = returnData?.items || []
+      const refundList = refundData?.items || []
+      const orderList = orderData?.items || []
+
+      const [returnDetails, refundDetails, orderDetailRows] = await Promise.all([
+        Promise.all(returnList.map((request) => customerApi.getReturn(request.return_request_id))),
+        Promise.all(refundList.map((request) => customerApi.getRefund(request.refund_request_id))),
+        Promise.all(orderList.map((summary) => customerApi.getOrder(summary.order_id))),
+      ])
+
+      const nextOrderDetails = {}
+      orderDetailRows.forEach((detail) => {
+        nextOrderDetails[detail.order_id] = detail
+      })
+
+      setReturns(returnList)
+      setOrders(orderList)
+      setOrderDetails(nextOrderDetails)
+      setClaimedQuantityMap(buildClaimedQuantityMap(refundDetails, returnDetails))
     } catch (e) {
       setError(e.message || '반품 정보를 불러오지 못했습니다.')
     } finally {
@@ -58,6 +85,33 @@ export default function ReturnsPage() {
   }
 
   useEffect(() => { load() }, [])
+
+  useEffect(() => {
+    const requestedOrderId = searchParams.get('orderId') || ''
+    if (requestedOrderId) {
+      setOrderId(requestedOrderId)
+      setSelected({})
+    }
+  }, [searchParams])
+
+  const returnableOrders = useMemo(
+    () => orders.filter((summary) => {
+      const detail = orderDetails[summary.order_id]
+      const status = detail?.order_status || summary.order_status
+      return status === 'DELIVERED' && hasRemainingItems(detail, claimedQuantityMap)
+    }),
+    [orders, orderDetails, claimedQuantityMap],
+  )
+
+  useEffect(() => {
+    if (!orderId || loading) return
+    const valid = returnableOrders.some((item) => String(item.order_id) === String(orderId))
+    if (!valid) {
+      setOrderId('')
+      setOrder(null)
+      setSelected({})
+    }
+  }, [orderId, loading, returnableOrders])
 
   useEffect(() => {
     let active = true
@@ -70,7 +124,11 @@ export default function ReturnsPage() {
 
     setOrderLoading(true)
     setError('')
-    customerApi.getOrder(orderId)
+
+    const cached = orderDetails[Number(orderId)] || orderDetails[orderId]
+    const task = cached ? Promise.resolve(cached) : customerApi.getOrder(orderId)
+
+    task
       .then((data) => {
         if (!active) return
         setOrder(data)
@@ -86,11 +144,16 @@ export default function ReturnsPage() {
       })
 
     return () => { active = false }
-  }, [orderId])
+  }, [orderId, orderDetails])
 
-  const returnableOrders = useMemo(
-    () => orders.filter((item) => ['DELIVERED', 'COMPLETED'].includes(item.order_status)),
-    [orders],
+  const availableItems = useMemo(
+    () => (order?.items || [])
+      .map((item) => ({
+        ...item,
+        remaining_quantity: getRemainingQuantity(item, claimedQuantityMap),
+      }))
+      .filter((item) => item.remaining_quantity > 0),
+    [order, claimedQuantityMap],
   )
 
   const selectedCount = useMemo(
@@ -112,18 +175,32 @@ export default function ReturnsPage() {
       setError('반품할 주문을 선택해주세요.')
       return
     }
+
     if (!items.length) {
       setError('반품할 상품과 수량을 선택해주세요.')
       return
     }
+
+    const invalidQuantity = items.some((row) => {
+      const item = availableItems.find((candidate) => Number(candidate.order_item_id) === Number(row.order_item_id))
+      return !item || row.return_quantity > item.remaining_quantity
+    })
+
+    if (invalidQuantity) {
+      setError('반품 가능한 남은 수량을 초과했습니다. 상품 수량을 다시 확인해주세요.')
+      return
+    }
+
     if (reasonCode === 'OTHER' && !reasonDetail.trim()) {
       setError('기타 사유의 상세 내용을 입력해주세요.')
       return
     }
+
     if (!window.confirm(`총 ${selectedCount}개 상품으로 반품을 신청할까요?`)) return
 
     setSaving(true)
     setError('')
+
     try {
       const created = await customerApi.createReturn({
         order_id: Number(orderId),
@@ -162,14 +239,8 @@ export default function ReturnsPage() {
     }
   }
 
-  return (
-    <div className="container page-section returns-page">
-      <div className="page-title">
-        <span>RETURN</span>
-        <h1>반품 신청</h1>
-        <p>배송완료 또는 구매완료 상품의 반품을 신청하고 진행 상태를 확인하세요.</p>
-      </div>
-
+  const content = (
+    <>
       {error && (
         <div className="notice error retry-notice">
           {error}
@@ -196,7 +267,7 @@ export default function ReturnsPage() {
       <form className="panel return-form" onSubmit={submit}>
         <div className="panel-title-row">
           <h3><RotateCcw /> 반품 신청</h3>
-          <span>배송이 완료된 주문만 신청할 수 있습니다.</span>
+          <span>배송완료 상태이며 반품 가능한 수량이 남아있는 주문만 표시됩니다.</span>
         </div>
 
         <div className="return-step-label"><span>1</span><strong>주문 선택</strong></div>
@@ -210,7 +281,7 @@ export default function ReturnsPage() {
             <option value="">주문을 선택하세요</option>
             {returnableOrders.map((item) => (
               <option key={item.order_id} value={item.order_id}>
-                {item.order_no} · {item.order_status} · {money(item.total_amount)}원
+                {item.order_no} · {statusLabel(ORDER_STATUS_LABELS, item.order_status)} · {money(item.total_amount)}원
               </option>
             ))}
           </select>
@@ -219,39 +290,58 @@ export default function ReturnsPage() {
         {!loading && !returnableOrders.length && (
           <div className="return-info-box">
             <AlertCircle size={17} />
-            <span>현재 반품 신청이 가능한 배송완료/구매완료 주문이 없습니다.</span>
+            <span>현재 반품 가능한 배송완료 상품이 없습니다. 구매확정된 주문은 반품 신청 목록에 표시하지 않습니다.</span>
           </div>
         )}
 
         {orderLoading && <div className="loading-box compact-return-loading">주문상품을 불러오는 중...</div>}
 
-        {order?.items?.length > 0 && (
+        {availableItems.length > 0 && (
           <>
             <div className="return-step-label"><span>2</span><strong>반품 상품 및 수량</strong></div>
             <div className="return-item-list">
-              {order.items.map((item) => (
-                <div className="return-item-row" key={item.order_item_id}>
-                  <div>
-                    <strong>{item.product_name_snapshot}</strong>
-                    <span>{item.sku_snapshot || '기본 옵션'} · 구매수량 {item.quantity}개 · {money(item.item_amount)}원</span>
+              {availableItems.map((item) => {
+                const ordered = Number(item.quantity || 0)
+                const claimed = Math.max(0, ordered - item.remaining_quantity)
+
+                return (
+                  <div className="return-item-row" key={item.order_item_id}>
+                    <div>
+                      <strong>{item.product_name_snapshot}</strong>
+                      <span>
+                        {item.sku_snapshot || '기본 옵션'} · 구매수량 {ordered}개
+                        {claimed > 0 ? ` · 이미 신청 ${claimed}개` : ''}
+                        {' · '}신청가능 {item.remaining_quantity}개 · {money(item.item_amount)}원
+                      </span>
+                    </div>
+                    <label>
+                      반품수량
+                      <input
+                        type="number"
+                        min="0"
+                        max={item.remaining_quantity}
+                        value={selected[item.order_item_id] || 0}
+                        onChange={(e) => {
+                          const next = Math.max(0, Math.min(item.remaining_quantity, Number(e.target.value) || 0))
+                          setSelected({ ...selected, [item.order_item_id]: next })
+                        }}
+                      />
+                    </label>
                   </div>
-                  <label>
-                    반품수량
-                    <input
-                      type="number"
-                      min="0"
-                      max={item.quantity}
-                      value={selected[item.order_item_id] || 0}
-                      onChange={(e) => setSelected({ ...selected, [item.order_item_id]: e.target.value })}
-                    />
-                  </label>
-                </div>
-              ))}
+                )
+              })}
             </div>
           </>
         )}
 
-        {order && (
+        {orderId && !orderLoading && order && !availableItems.length && (
+          <div className="return-info-box">
+            <AlertCircle size={17} />
+            <span>이 주문에는 추가로 반품 신청할 수 있는 수량이 없습니다.</span>
+          </div>
+        )}
+
+        {order && availableItems.length > 0 && (
           <>
             <div className="return-step-label"><span>3</span><strong>반품 사유와 회수 방법</strong></div>
             <div className="return-option-grid">
@@ -320,7 +410,7 @@ export default function ReturnsPage() {
                 <span>반품번호 #{item.return_request_id} · {date(item.requested_at)}</span>
                 <small>{REASONS.find((reason) => reason.code === item.return_reason_code)?.label || item.return_reason_code}</small>
               </div>
-              <ChevronRight size={18} />
+              <span className="return-card-detail-link">상세보기 <ChevronRight size={18} /></span>
             </Link>
           ))}
           {!returns.length && (
@@ -331,6 +421,21 @@ export default function ReturnsPage() {
           )}
         </div>
       )}
+    </>
+  )
+
+  if (embedded) {
+    return <div className="returns-page refund-return-embedded">{content}</div>
+  }
+
+  return (
+    <div className="container page-section returns-page">
+      <div className="page-title">
+        <span>RETURN</span>
+        <h1>반품 신청</h1>
+        <p>배송완료 상품의 반품을 신청하고 진행 상태를 확인하세요.</p>
+      </div>
+      {content}
     </div>
   )
 }
