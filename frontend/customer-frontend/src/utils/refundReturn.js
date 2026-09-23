@@ -70,9 +70,52 @@ export function refundRequestHeadline(status) {
   return '환불신청'
 }
 
+export function getEffectiveReturnStatus(request = {}) {
+  const rawStatus = request?.return_status || ''
+
+  if (['REJECTED', 'CANCELLED'].includes(rawStatus)) return rawStatus
+  if (request?.completed_at) return 'COMPLETED'
+
+  const rank = {
+    REQUESTED: 1,
+    APPROVED: 2,
+    PICKUP_REQUESTED: 3,
+    PICKED_UP: 3,
+    RECEIVED: 4,
+    INSPECTING: 5,
+    COMPLETED: 6,
+  }
+
+  let inferredStatus = rawStatus || 'REQUESTED'
+  let inferredRank = rank[inferredStatus] || 0
+
+  const promote = (status, condition) => {
+    if (!condition) return
+    const nextRank = rank[status] || 0
+    if (nextRank > inferredRank) {
+      inferredStatus = status
+      inferredRank = nextRank
+    }
+  }
+
+  promote('PICKED_UP', request?.pickup_at)
+  promote('RECEIVED', request?.received_at)
+  promote('INSPECTING', request?.inspected_at)
+
+  return inferredStatus
+}
+
 export function returnRequestHeadline(status) {
-  if (status === 'COMPLETED') return '반품완료'
-  if (status === 'REJECTED') return '반품거절'
-  if (status === 'CANCELLED') return '반품취소'
-  return '반품신청'
+  const labels = {
+    REQUESTED: '반품신청',
+    APPROVED: '반품승인',
+    PICKUP_REQUESTED: '회수요청',
+    PICKED_UP: '회수완료',
+    RECEIVED: '입고완료',
+    INSPECTING: '상품검수',
+    COMPLETED: '반품완료',
+    REJECTED: '반품거절',
+    CANCELLED: '반품취소',
+  }
+  return labels[status] || '반품신청'
 }

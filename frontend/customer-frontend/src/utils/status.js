@@ -1,16 +1,25 @@
 export const ORDER_STATUS_LABELS = {
+  READY: '주문접수',
   CREATED: '주문접수',
   ORDERED: '주문접수',
   PENDING: '주문대기',
+  PENDING_PAYMENT: '결제대기',
   PAYMENT_PENDING: '결제대기',
   PAID: '결제완료',
   PREPARING: '상품준비중',
   SHIPPING: '배송중',
   SHIPPED: '배송중',
+  IN_TRANSIT: '배송중',
   DELIVERED: '배송완료',
   COMPLETED: '구매확정',
   CANCELLED: '주문취소',
   REFUNDED: '환불완료',
+}
+
+// order_items.item_status도 주문 상태와 같은 코드를 사용한다.
+// 별도 이름을 두어 주문 전체 상태와 상품별 상태를 UI에서 명확히 구분한다.
+export const ITEM_STATUS_LABELS = {
+  ...ORDER_STATUS_LABELS,
 }
 
 export const REFUND_STATUS_LABELS = {
@@ -44,4 +53,12 @@ export const INQUIRY_STATUS_LABELS = {
 
 export function statusLabel(map, value) {
   return map[value] || value || '-'
+}
+
+export function orderStatusTone(status = '') {
+  if (['COMPLETED', 'DELIVERED'].includes(status)) return 'success'
+  if (['SHIPPING', 'SHIPPED', 'IN_TRANSIT'].includes(status)) return 'shipping'
+  if (['PREPARING', 'PAID'].includes(status)) return 'progress'
+  if (['CANCELLED', 'REFUNDED'].includes(status)) return 'danger'
+  return 'neutral'
 }

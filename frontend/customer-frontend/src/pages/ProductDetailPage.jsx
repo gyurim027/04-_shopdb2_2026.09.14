@@ -61,6 +61,41 @@ function sellerLabel(seller) {
 }
 
 
+function normalizeSellers(rawSellers) {
+  const rows = Array.isArray(rawSellers) ? rawSellers : []
+  const byOrg = new Map()
+
+  rows.forEach((item) => {
+    if (item?.org_id === undefined || item?.org_id === null) return
+
+    const key = String(item.org_id)
+    const current = byOrg.get(key)
+    const available = Math.max(0, Number(item.available_quantity || 0))
+
+    if (!current) {
+      byOrg.set(key, {
+        ...item,
+        available_quantity: available,
+      })
+      return
+    }
+
+    byOrg.set(key, {
+      ...current,
+      seller_name: current.seller_name || item.seller_name,
+      org_name: current.org_name || item.org_name,
+      available_quantity: Number(current.available_quantity || 0) + available,
+    })
+  })
+
+  return [...byOrg.values()].sort((a, b) => {
+    const stockDiff = Number(b.available_quantity || 0) - Number(a.available_quantity || 0)
+    if (stockDiff !== 0) return stockDiff
+    return Number(a.org_id || 0) - Number(b.org_id || 0)
+  })
+}
+
+
 function getImageSource(imageItem) {
   if (!imageItem) {
     return null
@@ -239,11 +274,7 @@ export default function ProductDetailPage() {
 
 
   const sellers = useMemo(
-    () => (
-      Array.isArray(variant?.sellers)
-        ? variant.sellers
-        : []
-    ),
+    () => normalizeSellers(variant?.sellers),
     [variant],
   )
 
@@ -266,6 +297,27 @@ export default function ProductDetailPage() {
 
   const sellerAvailable = Number(
     seller?.available_quantity || 0
+  )
+
+
+  const sellerStockTotal = useMemo(
+    () => sellers.reduce(
+      (sum, item) => sum + Math.max(0, Number(item.available_quantity || 0)),
+      0,
+    ),
+    [sellers],
+  )
+
+
+  const variantAvailable = Math.max(
+    0,
+    Number(variant?.available_quantity || 0),
+  )
+
+
+  const stockMismatch = (
+    variant
+    && variantAvailable !== sellerStockTotal
   )
 
 
@@ -447,27 +499,19 @@ export default function ProductDetailPage() {
       return
     }
 
-    const currentSellerStillValid = (
-      sellers.some(
-        (item) => (
-          String(item.org_id)
-          === String(orgId)
-        )
-      )
+    const currentSeller = sellers.find(
+      (item) => String(item.org_id) === String(orgId),
     )
 
-    if (!currentSellerStillValid) {
-      const nextSeller = (
-        sellers.find(
-          (item) => (
-            Number(
-              item.available_quantity
-              || 0
-            ) > 0
-          )
-        )
-        || sellers[0]
-      )
+    const stockedSeller = sellers.find(
+      (item) => Number(item.available_quantity || 0) > 0,
+    )
+
+    if (
+      !currentSeller
+      || (Number(currentSeller.available_quantity || 0) <= 0 && stockedSeller)
+    ) {
+      const nextSeller = stockedSeller || sellers[0]
 
       setOrgId(
         nextSeller
@@ -477,7 +521,7 @@ export default function ProductDetailPage() {
     }
 
     setQty(1)
-  }, [variantId])
+  }, [variantId, sellers, orgId])
 
 
   useEffect(() => {
@@ -997,6 +1041,12 @@ export default function ProductDetailPage() {
                 </div>
               )
             }
+
+            {stockMismatch && (
+              <div className="seller-stock-sync-warning">
+                전체 재고와 판매자별 재고가 일치하지 않습니다. 재고가 있는 판매자를 우선 선택합니다.
+              </div>
+            )}
 
           </div>
 

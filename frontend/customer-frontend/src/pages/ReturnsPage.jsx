@@ -97,8 +97,10 @@ export default function ReturnsPage({ embedded = false }) {
   const returnableOrders = useMemo(
     () => orders.filter((summary) => {
       const detail = orderDetails[summary.order_id]
-      const status = detail?.order_status || summary.order_status
-      return status === 'DELIVERED' && hasRemainingItems(detail, claimedQuantityMap)
+      return (detail?.items || []).some(
+        (item) => item.item_status === 'DELIVERED'
+          && getRemainingQuantity(item, claimedQuantityMap) > 0,
+      )
     }),
     [orders, orderDetails, claimedQuantityMap],
   )
@@ -148,6 +150,7 @@ export default function ReturnsPage({ embedded = false }) {
 
   const availableItems = useMemo(
     () => (order?.items || [])
+      .filter((item) => item.item_status === 'DELIVERED')
       .map((item) => ({
         ...item,
         remaining_quantity: getRemainingQuantity(item, claimedQuantityMap),
@@ -267,7 +270,7 @@ export default function ReturnsPage({ embedded = false }) {
       <form className="panel return-form" onSubmit={submit}>
         <div className="panel-title-row">
           <h3><RotateCcw /> 반품 신청</h3>
-          <span>배송완료 상태이며 반품 가능한 수량이 남아있는 주문만 표시됩니다.</span>
+          <span>주문 전체 상태와 관계없이, 상품별 상태가 배송완료이고 반품 가능한 수량이 남아있는 주문만 표시됩니다.</span>
         </div>
 
         <div className="return-step-label"><span>1</span><strong>주문 선택</strong></div>
@@ -281,7 +284,7 @@ export default function ReturnsPage({ embedded = false }) {
             <option value="">주문을 선택하세요</option>
             {returnableOrders.map((item) => (
               <option key={item.order_id} value={item.order_id}>
-                {item.order_no} · {statusLabel(ORDER_STATUS_LABELS, item.order_status)} · {money(item.total_amount)}원
+                {item.order_no} · 배송완료 상품 있음 · {money(item.total_amount)}원
               </option>
             ))}
           </select>

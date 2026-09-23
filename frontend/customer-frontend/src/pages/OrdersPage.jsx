@@ -4,15 +4,18 @@ import { Link } from 'react-router-dom'
 import { customerApi } from '../api/customer'
 import { resolveMediaUrl } from '../api/client'
 import {
+  ITEM_STATUS_LABELS,
   ORDER_STATUS_LABELS,
   REFUND_STATUS_LABELS,
   RETURN_STATUS_LABELS,
+  orderStatusTone,
   statusLabel,
 } from '../utils/status'
 import {
   buildClaimedQuantityMap,
   buildLinkedRefundIds,
   getRemainingQuantity,
+  getEffectiveReturnStatus,
   refundRequestHeadline,
   returnRequestHeadline,
 } from '../utils/refundReturn'
@@ -109,8 +112,8 @@ export default function OrdersPage() {
   const currentYear = new Date().getFullYear()
   const years = Array.from({ length: 6 }, (_, index) => String(currentYear - index))
 
-  const load = async () => {
-    setLoading(true)
+  const load = async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true)
     setError('')
 
     try {
@@ -166,11 +169,17 @@ export default function OrdersPage() {
     } catch (e) {
       setError(e.message || '주문 및 환불/반품 내역을 불러오지 못했습니다.')
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 
-  useEffect(() => { load() }, [])
+  useEffect(() => {
+    load()
+    const timer = window.setInterval(() => {
+      load({ silent: true })
+    }, 5000)
+    return () => window.clearInterval(timer)
+  }, [])
 
   const entries = useMemo(() => {
     const normalEntries = orders.flatMap((summary) => {
@@ -270,6 +279,11 @@ export default function OrdersPage() {
             </span>
           </div>
         </Link>
+        {item.item_status && (
+          <span className={`order-item-status-badge compact ${orderStatusTone(item.item_status)}`}>
+            {statusLabel(ITEM_STATUS_LABELS, item.item_status)}
+          </span>
+        )}
       </div>
     )
   }
@@ -309,7 +323,20 @@ export default function OrdersPage() {
               const { order, summary } = entry
               const items = order.items || []
               const status = order.order_status || summary.order_status
-              const action = requestAction(status, summary.order_id)
+              const hasReturnableDeliveredItem = items.some(
+                (item) => item.item_status === 'DELIVERED'
+                  && getRemainingQuantity(item, claimedQuantityMap) > 0,
+              )
+              const action = hasReturnableDeliveredItem
+                ? {
+                    label: '환불/반품 신청',
+                    to: `/refunds?mode=return&orderId=${summary.order_id}`,
+                    className: '',
+                  }
+                : requestAction(status, summary.order_id)
+              const itemStatusSet = [...new Set(items.map((item) => item.item_status).filter(Boolean))]
+              const hasItemStatusDifference = itemStatusSet.length > 1
+                || (itemStatusSet.length === 1 && itemStatusSet[0] !== status)
 
               return (
                 <section className="orders-market-card" key={entry.key}>
@@ -322,9 +349,15 @@ export default function OrdersPage() {
                     <div className="orders-market-products">
                       <div className="orders-market-status">
                         <strong>{statusLabel(ORDER_STATUS_LABELS, status)}</strong>
-                        {status === 'DELIVERED' && <span>배송이 완료되었습니다.</span>}
-                        {status === 'PAID' && <span>결제가 완료되어 배송 준비를 기다리고 있습니다.</span>}
-                        {status === 'COMPLETED' && <span>구매가 확정된 주문입니다.</span>}
+                        {hasItemStatusDifference ? (
+                          <span>상품별 처리 상태가 다릅니다. 각 상품의 상태를 확인해주세요.</span>
+                        ) : (
+                          <>
+                            {status === 'DELIVERED' && <span>배송이 완료되었습니다.</span>}
+                            {status === 'PAID' && <span>결제가 완료되어 배송 준비를 기다리고 있습니다.</span>}
+                            {status === 'COMPLETED' && <span>구매가 확정된 주문입니다.</span>}
+                          </>
+                        )}
                       </div>
 
                       {items.length ? items.map((item) => renderProductRow(item, item.display_quantity)) : (
@@ -350,7 +383,9 @@ export default function OrdersPage() {
 
             const request = entry.request
             const isRefund = entry.kind === 'refund'
-            const requestStatus = isRefund ? request.refund_status : request.return_status
+            const requestStatus = isRefund
+              ? request.refund_status
+              : getEffectiveReturnStatus(request)
             const headline = isRefund ? refundRequestHeadline(requestStatus) : returnRequestHeadline(requestStatus)
             const label = isRefund
               ? statusLabel(REFUND_STATUS_LABELS, requestStatus)
@@ -359,7 +394,10 @@ export default function OrdersPage() {
             const requestItems = request.items || []
 
             return (
-              <section className={`orders-market-card request-history-card ${isRefund ? 'is-refund' : 'is-return'}`} key={entry.key}>
+              <section
+                className={`orders-market-card request-history-card ${isRefund ? 'is-refund' : 'is-return'} ${!isRefund && requestStatus === 'COMPLETED' ? 'is-completed' : ''}`}
+                key={entry.key}
+              >
                 <div className="orders-market-card-head">
                   <strong>{formatOrderDate(orderDate)}</strong>
                   <Link to={`/orders/${entry.orderId}`}>주문 상세보기 <ChevronRight size={17} /></Link>

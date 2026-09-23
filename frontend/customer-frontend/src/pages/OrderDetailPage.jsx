@@ -13,7 +13,7 @@ import { Link, useParams, useSearchParams } from 'react-router-dom'
 import { customerApi } from '../api/customer'
 import { resolveMediaUrl } from '../api/client'
 import { useToast } from '../context/ToastContext'
-import { ORDER_STATUS_LABELS, statusLabel } from '../utils/status'
+import { ITEM_STATUS_LABELS, ORDER_STATUS_LABELS, orderStatusTone, statusLabel } from '../utils/status'
 import { buildClaimedQuantityMap, hasRemainingItems } from '../utils/refundReturn'
 
 const money = (v) => Number(v || 0).toLocaleString('ko-KR')
@@ -172,7 +172,24 @@ export default function OrderDetailPage() {
   const canPay = order ? !['PAID', 'COMPLETED', 'CANCELLED', 'REFUNDED', 'DELIVERED'].includes(order.order_status) : false
   const currentStep = useMemo(() => statusStep(order?.order_status), [order?.order_status])
   const hasRemaining = useMemo(() => hasRemainingItems(order, claimedQuantityMap), [order, claimedQuantityMap])
-  const action = order && hasRemaining ? requestAction(order.order_status, order.order_id) : null
+  const hasReturnableDeliveredItem = useMemo(
+    () => (order?.items || []).some(
+      (item) => item.item_status === 'DELIVERED'
+        && Number(item.quantity || 0) > Number(claimedQuantityMap[Number(item.order_item_id)] || 0),
+    ),
+    [order, claimedQuantityMap],
+  )
+  const action = order && hasRemaining
+    ? (hasReturnableDeliveredItem
+      ? { label: '환불/반품 신청', to: `/refunds?mode=return&orderId=${order.order_id}` }
+      : requestAction(order.order_status, order.order_id))
+    : null
+  const itemStatuses = useMemo(
+    () => [...new Set((order?.items || []).map((item) => item.item_status).filter(Boolean))],
+    [order?.items],
+  )
+  const hasMixedItemStatus = itemStatuses.length > 1
+    || (itemStatuses.length === 1 && itemStatuses[0] !== order?.order_status)
 
   if (loading) return <div className="container page-section"><div className="loading-box">주문정보를 불러오는 중...</div></div>
   if (!order) return <div className="container page-section"><div className="notice error retry-notice">{error || '주문 정보를 찾을 수 없습니다.'}<button type="button" onClick={load}><RotateCcw size={14} /> 다시 시도</button></div></div>
@@ -182,14 +199,21 @@ export default function OrderDetailPage() {
       <div className="page-title order-detail-title">
         <span>ORDER DETAIL</span>
         <h1>{order.order_no}</h1>
-        <p>{date(order.ordered_at)} · <b>{statusLabel(ORDER_STATUS_LABELS, order.order_status)}</b></p>
+        <p>
+          {date(order.ordered_at)} · 주문 전체 상태 <b>{statusLabel(ORDER_STATUS_LABELS, order.order_status)}</b>
+        </p>
       </div>
 
       {params.get('pay') === '1' && canPay && <div className="notice info">주문이 생성되었습니다. 아래 결제영역에서 Mock 카드결제를 진행해주세요.</div>}
       {error && <div className="notice error">{error}</div>}
       {payment && <div className="notice success">결제가 완료되었습니다. 결제번호 #{payment.payment_id}</div>}
+      {hasMixedItemStatus && (
+        <div className="notice info order-item-status-guide">
+          상품마다 처리 상태가 다릅니다. 아래 주문상품에서 각 상품의 현재 상태를 확인할 수 있습니다.
+        </div>
+      )}
 
-      <div className="order-stepper" aria-label="주문 진행 단계">
+      <div className="order-stepper" aria-label="주문 전체 진행 단계">
         {STEP_KEYS.map((step, index) => {
           const StepIcon = step.icon
           const number = index + 1
@@ -231,7 +255,12 @@ export default function OrderDetailPage() {
                 ) : (
                   <div className="order-product-link is-disabled">{content}</div>
                 )}
-                <b className="order-line-price">{money(item.item_amount)}원</b>
+                <div className="order-line-meta">
+                  <span className={`order-item-status-badge ${orderStatusTone(item.item_status || order.order_status)}`}>
+                    {statusLabel(ITEM_STATUS_LABELS, item.item_status || order.order_status)}
+                  </span>
+                  <b className="order-line-price">{money(item.item_amount)}원</b>
+                </div>
               </div>
             )
           })}

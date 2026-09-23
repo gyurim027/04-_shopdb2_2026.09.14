@@ -1,13 +1,13 @@
 import { useEffect, useState } from 'react'
 import { Link, useLocation, useNavigate } from 'react-router-dom'
-import { LockKeyhole } from 'lucide-react'
+import { LockKeyhole, UserRoundCheck } from 'lucide-react'
 import { useAuth } from '../context/AuthContext'
 
 export default function LoginPage() {
   const [loginId, setLoginId] = useState('')
   const [password, setPassword] = useState('')
   const [error, setError] = useState('')
-  const { login, loading, isLoggedIn } = useAuth()
+  const { login, guestLogin, loading, isLoggedIn } = useAuth()
   const navigate = useNavigate()
   const location = useLocation()
 
@@ -23,6 +23,16 @@ export default function LoginPage() {
       navigate(location.state?.from || '/')
     } catch (e) {
       setError(e.message)
+    }
+  }
+
+  const enterAsGuest = async () => {
+    setError('')
+    try {
+      await guestLogin()
+      navigate(location.state?.from || '/')
+    } catch (e) {
+      setError(e.message || '게스트 입장에 실패했습니다.')
     }
   }
 
@@ -42,6 +52,19 @@ export default function LoginPage() {
           {error && <div className="notice error compact">{error}</div>}
           <button className="btn btn-primary full" disabled={loading}>{loading ? '로그인 중...' : '로그인'}</button>
         </form>
+
+        <div className="guest-login-divider"><span>또는</span></div>
+        <button
+          type="button"
+          className="btn guest-login-button full"
+          onClick={enterAsGuest}
+          disabled={loading}
+        >
+          <UserRoundCheck size={18} />
+          {loading ? '게스트 준비 중...' : '게스트로 들어가기'}
+        </button>
+        <p className="guest-login-help">회원가입 없이 장바구니, 주문, 결제, 환불/반품 등 고객 기능을 바로 검사할 수 있습니다.</p>
+
         <div className="auth-bottom">아직 회원이 아니신가요? <Link to="/register">회원가입</Link></div>
       </div>
     </div>

@@ -12,6 +12,7 @@ import {
 import { Link, useParams } from 'react-router-dom'
 import { customerApi } from '../api/customer'
 import { RETURN_STATUS_LABELS, statusLabel } from '../utils/status'
+import { getEffectiveReturnStatus } from '../utils/refundReturn'
 
 const RETURN_STEPS = [
   { key: 'REQUESTED', label: '반품접수', icon: CircleDot },
@@ -61,8 +62,8 @@ export default function ReturnDetailPage() {
   const [loading, setLoading] = useState(true)
   const [error, setError] = useState('')
 
-  const load = async () => {
-    setLoading(true)
+  const load = async ({ silent = false } = {}) => {
+    if (!silent) setLoading(true)
     setError('')
     try {
       const [detailData, statusData] = await Promise.all([
@@ -74,15 +75,36 @@ export default function ReturnDetailPage() {
     } catch (e) {
       setError(e.message || '반품 상세 정보를 불러오지 못했습니다.')
     } finally {
-      setLoading(false)
+      if (!silent) setLoading(false)
     }
   }
 
-  useEffect(() => { load() }, [returnRequestId])
+  useEffect(() => {
+    load()
+    const timer = window.setInterval(() => {
+      load({ silent: true })
+    }, 5000)
+    return () => window.clearInterval(timer)
+  }, [returnRequestId])
 
-  const currentStatus = status?.return_status || detail?.return_status
+  const liveReturn = useMemo(() => ({
+    ...(detail || {}),
+    ...(status || {}),
+    return_status: status?.return_status || detail?.return_status,
+    requested_at: status?.requested_at || detail?.requested_at,
+    pickup_at: status?.pickup_at || detail?.pickup_at,
+    received_at: status?.received_at || detail?.received_at,
+    inspected_at: status?.inspected_at || detail?.inspected_at,
+    completed_at: status?.completed_at || detail?.completed_at,
+    carrier_name: status?.carrier_name || detail?.carrier_name,
+    tracking_no: status?.tracking_no || detail?.tracking_no,
+    refund_request_id: status?.refund_request_id || detail?.refund_request_id,
+  }), [detail, status])
+
+  const rawStatus = status?.return_status || detail?.return_status
+  const currentStatus = useMemo(() => getEffectiveReturnStatus(liveReturn), [liveReturn])
   const currentStep = useMemo(() => STATUS_ORDER[currentStatus] || 0, [currentStatus])
-  const isStopped = ['REJECTED', 'CANCELLED'].includes(currentStatus)
+  const isStopped = ['REJECTED', 'CANCELLED'].includes(rawStatus)
 
   if (loading) {
     return <div className="container page-section"><div className="loading-box">반품 상세 정보를 불러오는 중...</div></div>
@@ -91,7 +113,7 @@ export default function ReturnDetailPage() {
   if (!detail) {
     return (
       <div className="container page-section">
-        <div className="notice error retry-notice">{error || '반품 정보를 찾을 수 없습니다.'}<button type="button" onClick={load}><RotateCcw size={14} /> 다시 시도</button></div>
+        <div className="notice error retry-notice">{error || '반품 정보를 찾을 수 없습니다.'}<button type="button" onClick={() => load({ silent: true })}><RotateCcw size={14} /> 다시 시도</button></div>
       </div>
     )
   }
@@ -134,24 +156,24 @@ export default function ReturnDetailPage() {
           <div className="panel-title-row"><h3><RotateCcw /> 반품 정보</h3><span>#{detail.return_request_id}</span></div>
           <div className="return-info-grid">
             <div><span>현재 상태</span><b>{statusLabel(RETURN_STATUS_LABELS, currentStatus)}</b></div>
-            <div><span>신청일시</span><b>{date(detail.requested_at)}</b></div>
+            <div><span>신청일시</span><b>{date(liveReturn.requested_at)}</b></div>
             <div><span>반품 사유</span><b>{REASON_LABELS[detail.return_reason_code] || detail.return_reason_code}</b></div>
             <div><span>회수 방법</span><b>{PICKUP_LABELS[detail.pickup_method] || detail.pickup_method}</b></div>
             <div className="full"><span>상세 사유</span><b>{detail.return_reason_detail || '상세 사유 없음'}</b></div>
-            <div><span>택배사</span><b>{detail.carrier_name || '-'}</b></div>
-            <div><span>운송장번호</span><b>{detail.tracking_no || '-'}</b></div>
+            <div><span>택배사</span><b>{liveReturn.carrier_name || '-'}</b></div>
+            <div><span>운송장번호</span><b>{liveReturn.tracking_no || '-'}</b></div>
           </div>
         </section>
 
         <section className="panel return-date-panel">
-          <div className="panel-title-row"><h3><Truck /> 처리 일정</h3><button type="button" className="small-btn" onClick={load}><RotateCcw size={13} /> 새로고침</button></div>
+          <div className="panel-title-row"><h3><Truck /> 처리 일정</h3><button type="button" className="small-btn" onClick={() => load({ silent: true })}><RotateCcw size={13} /> 새로고침</button></div>
           <div className="return-date-list">
-            <div><span>반품 신청</span><b>{date(detail.requested_at)}</b></div>
-            <div><span>회수 완료</span><b>{date(detail.pickup_at)}</b></div>
-            <div><span>상품 입고</span><b>{date(detail.received_at)}</b></div>
-            <div><span>검수 처리</span><b>{date(detail.inspected_at)}</b></div>
-            <div><span>반품 완료</span><b>{date(detail.completed_at)}</b></div>
-            <div><span>연결된 환불번호</span><b>{detail.refund_request_id ? `#${detail.refund_request_id}` : '-'}</b></div>
+            <div><span>반품 신청</span><b>{date(liveReturn.requested_at)}</b></div>
+            <div><span>회수 완료</span><b>{date(liveReturn.pickup_at)}</b></div>
+            <div><span>상품 입고</span><b>{date(liveReturn.received_at)}</b></div>
+            <div><span>검수 처리</span><b>{date(liveReturn.inspected_at)}</b></div>
+            <div><span>반품 완료</span><b>{date(liveReturn.completed_at)}</b></div>
+            <div><span>연결된 환불번호</span><b>{liveReturn.refund_request_id ? `#${liveReturn.refund_request_id}` : '-'}</b></div>
           </div>
         </section>
       </div>

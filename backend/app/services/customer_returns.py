@@ -5,7 +5,6 @@ from sqlalchemy.orm import Session
 
 from app.schemas.customer_returns import (
     CustomerReturnCreateRequest,
-    CustomerReturnCreateResponse,
     CustomerReturnItemResponse,
     CustomerReturnListItemResponse,
     CustomerReturnListResponse,
@@ -61,8 +60,8 @@ def _check_returnable_order(
     """
     반품 신청 가능한 주문인지 확인한다.
 
-    현재 반품은 실제 상품을 수령한 이후의 절차로 보고
-    DELIVERED 또는 COMPLETED 상태에서만 허용한다.
+    주문 전체 상태가 아니라 선택된 주문상품(item_status)을 기준으로
+    배송완료 여부를 검증한다. 주문 소유권과 결제 완료 여부를 확인한다.
     """
 
     order = _get_owned_order(
@@ -70,20 +69,6 @@ def _check_returnable_order(
         user_id=user_id,
         order_id=order_id,
     )
-
-    returnable_statuses = {
-        "DELIVERED",
-        "COMPLETED",
-    }
-
-    if order["order_status"] not in returnable_statuses:
-        raise HTTPException(
-            status_code=status.HTTP_409_CONFLICT,
-            detail=(
-                "현재 상태의 주문은 반품을 신청할 수 없습니다. "
-                "배송 완료된 주문만 반품 신청이 가능합니다."
-            ),
-        )
 
     completed_payment = db.execute(
         text(
@@ -126,7 +111,6 @@ def _normalize_return_items(
                 "order_item_id": item.order_item_id,
                 "return_quantity": item.return_quantity,
             }
-
         else:
             normalized[
                 item.order_item_id
@@ -180,9 +164,6 @@ def _prepare_return_items(
     """
     반품 상품이 실제 주문상품인지 확인하고
     반품 가능한 수량을 검증한다.
-
-    동시에 products.seller_user_id를 조회해서
-    이후 판매사별 반품 요청 분리에 사용한다.
     """
 
     normalized_items = _normalize_return_items(
@@ -196,26 +177,21 @@ def _prepare_return_items(
             text(
                 """
                 SELECT
-                    oi.order_item_id,
-                    oi.order_id,
-                    oi.product_id,
-                    oi.variant_id,
-                    oi.product_name_snapshot,
-                    oi.sku_snapshot,
-                    oi.quantity,
-                    oi.unit_price,
-                    oi.item_amount,
-                    oi.item_status,
+                    order_item_id,
+                    order_id,
+                    product_id,
+                    variant_id,
+                    product_name_snapshot,
+                    sku_snapshot,
+                    quantity,
+                    unit_price,
+                    item_amount,
+                    item_status
 
-                    p.seller_user_id
+                FROM order_items
 
-                FROM order_items AS oi
-
-                INNER JOIN products AS p
-                    ON p.product_id = oi.product_id
-
-                WHERE oi.order_item_id = :order_item_id
-                  AND oi.order_id = :order_id
+                WHERE order_item_id = :order_item_id
+                  AND order_id = :order_id
                 """
             ),
             {
@@ -230,6 +206,15 @@ def _prepare_return_items(
                 detail=(
                     "해당 주문에 포함되지 않은 상품이 "
                     "반품 요청에 포함되어 있습니다."
+                ),
+            )
+
+        if order_item["item_status"] != "DELIVERED":
+            raise HTTPException(
+                status_code=status.HTTP_409_CONFLICT,
+                detail=(
+                    f"'{order_item['product_name_snapshot']}'은(는) "
+                    "배송완료 상태가 아니어서 반품을 신청할 수 없습니다."
                 ),
             )
 
@@ -271,9 +256,6 @@ def _prepare_return_items(
                 "variant_id": order_item[
                     "variant_id"
                 ],
-                "seller_user_id": order_item[
-                    "seller_user_id"
-                ],
                 "product_name_snapshot": order_item[
                     "product_name_snapshot"
                 ],
@@ -290,74 +272,16 @@ def _prepare_return_items(
     return prepared_items
 
 
-def _group_return_items_by_seller(
-    prepared_items: list[dict],
-) -> dict[int, list[dict]]:
-    """
-    반품 상품을 products.seller_user_id 기준으로 묶는다.
-
-    예:
-    seller 2
-      - order_item 10
-      - order_item 11
-
-    seller 3
-      - order_item 12
-
-    이후 각 판매사 그룹마다
-    return_requests를 한 건씩 생성한다.
-    """
-
-    grouped_items: dict[int, list[dict]] = {}
-
-    for item in prepared_items:
-        seller_user_id = int(
-            item["seller_user_id"]
-        )
-
-        if seller_user_id not in grouped_items:
-            grouped_items[seller_user_id] = []
-
-        grouped_items[seller_user_id].append(
-            item
-        )
-
-    return grouped_items
-
-
 def create_customer_return(
     db: Session,
     user_id: int,
     return_in: CustomerReturnCreateRequest,
-) -> CustomerReturnCreateResponse:
+) -> CustomerReturnResponse:
     """
     고객 반품 신청을 생성한다.
 
-    한 번의 반품 신청에 여러 판매사의 상품이 포함된 경우
-    판매사별로 별도의 return_requests를 생성한다.
-
-    DB 구조는 변경하지 않는다.
-
-    판매사 구분:
-    order_items
-        -> products
-        -> seller_user_id
-
-    예:
-    판매사 A 상품 2개
-    판매사 B 상품 1개
-
-    결과:
-    return_request 1
-        -> 판매사 A 상품 2개
-
-    return_request 2
-        -> 판매사 B 상품 1개
-
-    모든 반품 요청과 반품 상품은
-    하나의 트랜잭션에서 처리한다.
-
-    중간에 하나라도 실패하면 전체 rollback한다.
+    반품 요청은 REQUESTED 상태로 생성되며,
+    검수 및 환불 처리는 이후 관리자 기능에서 진행한다.
     """
 
     order = _check_returnable_order(
@@ -406,101 +330,80 @@ def create_customer_return(
         return_in=return_in,
     )
 
-    grouped_items = (
-        _group_return_items_by_seller(
-            prepared_items=prepared_items,
-        )
-    )
-
-    created_return_request_ids: list[int] = []
-
     try:
-        for seller_user_id in sorted(
-            grouped_items.keys()
-        ):
-            seller_items = grouped_items[
-                seller_user_id
-            ]
+        result = db.execute(
+            text(
+                """
+                INSERT INTO return_requests (
+                    order_id,
+                    return_reason_code,
+                    return_reason_detail,
+                    return_status,
+                    pickup_method,
+                    carrier_name,
+                    tracking_no,
+                    refund_request_id
+                )
+                VALUES (
+                    :order_id,
+                    :return_reason_code,
+                    :return_reason_detail,
+                    'REQUESTED',
+                    :pickup_method,
+                    NULL,
+                    NULL,
+                    NULL
+                )
+                """
+            ),
+            {
+                "order_id": order["order_id"],
+                "return_reason_code": (
+                    return_reason_code
+                ),
+                "return_reason_detail": (
+                    return_reason_detail
+                ),
+                "pickup_method": pickup_method,
+            },
+        )
 
-            result = db.execute(
+        return_request_id = result.lastrowid
+
+        for item in prepared_items:
+            db.execute(
                 text(
                     """
-                    INSERT INTO return_requests (
-                        order_id,
-                        return_reason_code,
-                        return_reason_detail,
-                        return_status,
-                        pickup_method,
-                        carrier_name,
-                        tracking_no,
-                        refund_request_id
+                    INSERT INTO return_items (
+                        return_request_id,
+                        order_item_id,
+                        return_quantity,
+                        item_condition,
+                        inspection_result,
+                        inspection_note
                     )
                     VALUES (
-                        :order_id,
-                        :return_reason_code,
-                        :return_reason_detail,
-                        'REQUESTED',
-                        :pickup_method,
+                        :return_request_id,
+                        :order_item_id,
+                        :return_quantity,
                         NULL,
-                        NULL,
+                        'PENDING',
                         NULL
                     )
                     """
                 ),
                 {
-                    "order_id": order["order_id"],
-                    "return_reason_code": (
-                        return_reason_code
+                    "return_request_id": (
+                        return_request_id
                     ),
-                    "return_reason_detail": (
-                        return_reason_detail
-                    ),
-                    "pickup_method": pickup_method,
+                    "order_item_id": item[
+                        "order_item_id"
+                    ],
+                    "return_quantity": item[
+                        "return_quantity"
+                    ],
                 },
             )
-
-            return_request_id = int(
-                result.lastrowid
-            )
-
-            created_return_request_ids.append(
-                return_request_id
-            )
-
-            for item in seller_items:
-                db.execute(
-                    text(
-                        """
-                        INSERT INTO return_items (
-                            return_request_id,
-                            order_item_id,
-                            return_quantity,
-                            item_condition,
-                            inspection_result,
-                            inspection_note
-                        )
-                        VALUES (
-                            :return_request_id,
-                            :order_item_id,
-                            :return_quantity,
-                            NULL,
-                            'PENDING',
-                            NULL
-                        )
-                        """
-                    ),
-                    {
-                        "return_request_id": (
-                            return_request_id
-                        ),
-                        "order_item_id": item[
-                            "order_item_id"
-                        ],
-                        "return_quantity": item[
-                            "return_quantity"
-                        ],
-                    },
-                )
 
         db.commit()
 
@@ -521,21 +424,10 @@ def create_customer_return(
             ),
         ) from exc
 
-    requests = [
-        get_customer_return_detail(
-            db=db,
-            user_id=user_id,
-            return_request_id=(
-                return_request_id
-            ),
-        )
-        for return_request_id
-        in created_return_request_ids
-    ]
-
-    return CustomerReturnCreateResponse(
-        requests=requests,
-        total=len(requests),
+    return get_customer_return_detail(
+        db=db,
+        user_id=user_id,
+        return_request_id=return_request_id,
     )
 
 
@@ -666,12 +558,8 @@ def get_customer_return_detail(
         return_request_id=return_request[
             "return_request_id"
         ],
-        order_id=return_request[
-            "order_id"
-        ],
-        order_no=return_request[
-            "order_no"
-        ],
+        order_id=return_request["order_id"],
+        order_no=return_request["order_no"],
         return_reason_code=return_request[
             "return_reason_code"
         ],
@@ -720,9 +608,6 @@ def get_customer_returns(
 ) -> CustomerReturnListResponse:
     """
     로그인한 고객의 반품 요청 목록 조회.
-
-    판매사가 여러 명이었던 한 번의 고객 신청은
-    판매사별 return_request가 각각 목록에 표시된다.
     """
 
     total = db.execute(
@@ -887,12 +772,8 @@ def get_customer_return_status(
         return_request_id=row[
             "return_request_id"
         ],
-        order_id=row[
-            "order_id"
-        ],
-        order_no=row[
-            "order_no"
-        ],
+        order_id=row["order_id"],
+        order_no=row["order_no"],
         return_status=row[
             "return_status"
         ],
